@@ -13,18 +13,20 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-let app: ReturnType<typeof initializeApp> | null = null;
-let auth: ReturnType<typeof getAuth> | null = null;
-let db: ReturnType<typeof getFirestore> | null = null;
+const hasFirebase = !!(firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY");
 
-try {
-  if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY") {
+let app: ReturnType<typeof initializeApp> = null as unknown as ReturnType<typeof initializeApp>;
+let auth: ReturnType<typeof getAuth> = null as unknown as ReturnType<typeof getAuth>;
+let db: ReturnType<typeof getFirestore> = null as unknown as ReturnType<typeof getFirestore>;
+
+if (hasFirebase) {
+  try {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
+  } catch (e) {
+    console.warn("Firebase initialization failed, using localStorage mode.", e);
   }
-} catch (e) {
-  console.warn("Firebase initialization failed, using localStorage mode.", e);
 }
 
 export { app, auth, db };
