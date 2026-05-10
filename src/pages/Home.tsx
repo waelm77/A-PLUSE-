@@ -89,7 +89,7 @@ export default function Home() {
           </h1>
           <p className="text-xl font-bold text-primary mb-4">د. وائل</p>
           <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-            منصة تعليمية متكاملة لطلاب جامعة شقراء - ادرس بذكاء، نجح بثقة
+            منصة تعليمية متكاملة لطلاب جامعة شقراء - ندرس بذكاء و ننجح بثقة
           </p>
         </div>
       </section>
@@ -200,7 +200,7 @@ export default function Home() {
       </section>
 
       <footer className="border-t border-border/50 py-8 text-center text-sm text-muted-foreground">
-        <p>جميع الحقوق محفوظة &copy; 2024 منصة A+ - جامعة شقراء</p>
+        <p>جميع الحقوق محفوظة &copy; 2026 منصة A+ - د. وائل</p>
       </footer>
     </div>
   );
