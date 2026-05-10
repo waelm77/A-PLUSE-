@@ -89,7 +89,7 @@ export default function Home() {
           </h1>
           <p className="text-xl font-bold text-primary mb-4">د. وائل</p>
           <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-            منصة تعليمية متكاملة لطلاب جامعة شقراء - ندرس بذكاء و ننجح بثقة
+            ادرس بذكاء - تقدم بثقة
           </p>
         </div>
       </section>
