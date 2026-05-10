@@ -45,19 +45,22 @@ function generateId(): string {
 
 // Seed default subjects if none exist
 export async function seedSubjects() {
-  const existing = await getSubjects();
-  if (existing.length === 0) {
+  if (useLocalStorage) {
+    const existing = getLocalItems<Subject>("subjects");
+    if (existing.length > 0) return;
     const defaults: Subject[] = [
       { id: generateId(), name: "الكيمياء العامة", description: "شرح شامل لمبادئ الكيمياء لطلاب السنة التحضيرية", color: "#00BCD4", icon: "FlaskConical", code: "chem101", createdAt: new Date().toISOString() },
       { id: generateId(), name: "الفيزياء العامة", description: "أساسيات الفيزياء الميكانيكية والكهربائية", color: "#3F51B5", icon: "Atom", code: "phys101", createdAt: new Date().toISOString() },
       { id: generateId(), name: "الكيمياء الحيوية", description: "دراسة العمليات الكيميائية داخل الكائنات الحية", color: "#E91E63", icon: "Dna", code: "biochem101", createdAt: new Date().toISOString() },
       { id: generateId(), name: "التشريح", description: "دراسة بنية جسم الإنسان وأنظمته المختلفة", color: "#F44336", icon: "Heart", code: "anat101", createdAt: new Date().toISOString() },
     ];
-    if (useLocalStorage) {
-      setLocalItems("subjects", defaults);
-      // Seed content for the first subject
-      seedContent(defaults[0].id);
-    }
+    setLocalItems("subjects", defaults);
+    seedContent(defaults[0].id);
+    return;
+  }
+  const existing = await getSubjects();
+  if (existing.length === 0) {
+    // Firebase path - no automatic seeding needed
   }
 }
 
