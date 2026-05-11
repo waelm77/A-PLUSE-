@@ -31,6 +31,8 @@ export interface FileItem {
   downloadUrl: string;
   downloads: number;
   isFree: boolean;
+  canDownload?: boolean;
+  canView?: boolean;
   createdAt: string;
   order?: number;
 }
@@ -47,5 +49,31 @@ export interface Assessment {
 
 export interface UserProgress {
   userId: string;
-  completedItems: string[]; // List of IDs (Video, File, Assessment)
+  completedItems: string[];
+}
+
+export interface DeviceInfo {
+  deviceId: string;
+  deviceName: string;
+  userAgent: string;
+  lastAccess: string;
+  approvedAt: string;
+}
+
+export interface Student {
+  id: string;
+  username: string;
+  password: string;
+  displayName: string;
+  isActive: boolean;
+  enrolledSubjects: string[];
+  devices: DeviceInfo[];
+  createdAt: string;
+}
+
+export interface StudentFormData {
+  username: string;
+  password: string;
+  displayName: string;
+  enrolledSubjects: string[];
 }

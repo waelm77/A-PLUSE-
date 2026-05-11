@@ -7,14 +7,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
-const DEMO_USERS = [
-  { name: "أحمد محمد", email: "student1@example.com", password: "123456", role: "student" as const },
-  { name: "سارة عبدالله", email: "student2@example.com", password: "123456", role: "student" as const },
-  { name: "خالد سعد", email: "student3@example.com", password: "123456", role: "student" as const },
-  { name: "نورة فهد", email: "student4@example.com", password: "123456", role: "student" as const },
-  { name: "عبدالرحمن علي", email: "student5@example.com", password: "123456", role: "student" as const },
-  { name: "د. وائل عبد الفتاح", email: "admin@example.com", password: "admin123", role: "admin" as const },
-];
+const ADMIN_CREDENTIALS = { name: "د. وائل عبد الفتاح", email: "admin@example.com", password: "admin123" };
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -24,15 +17,14 @@ export default function Login() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const user = DEMO_USERS.find((u) => u.email === email && u.password === password);
-    if (user) {
+    if (email === ADMIN_CREDENTIALS.email && password === ADMIN_CREDENTIALS.password) {
       setUser({
-        uid: user.email,
-        email: user.email,
-        name: user.name,
-        role: user.role,
+        uid: ADMIN_CREDENTIALS.email,
+        email: ADMIN_CREDENTIALS.email,
+        name: ADMIN_CREDENTIALS.name,
+        role: "admin",
       });
-      toast.success(`مرحباً ${user.name}!`);
+      toast.success(`مرحباً ${ADMIN_CREDENTIALS.name}!`);
       navigate("/");
     } else {
       toast.error("البريد أو الرقم السري غير صحيح");
@@ -81,10 +73,9 @@ export default function Login() {
           </form>
 
           <div className="mt-6 border-t border-border/50 pt-4">
-            <p className="text-xs text-muted-foreground text-center mb-3">حسابات تجريبية</p>
+            <p className="text-xs text-muted-foreground text-center mb-3">دخول الأدمن فقط</p>
             <div className="space-y-1 text-xs text-muted-foreground">
-              <p>طالب: student1@example.com / 123456</p>
-              <p>أدمن: admin@example.com / admin123</p>
+              <p>الأدمن: admin@example.com / admin123</p>
             </div>
           </div>
         </CardContent>

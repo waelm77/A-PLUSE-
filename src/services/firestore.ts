@@ -13,7 +13,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import type { Subject, Video, FileItem, Assessment } from "../types";
+import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo } from "../types";
 
 let useLocalStorage = true;
 
@@ -110,6 +110,8 @@ async function seedContent(subjectId: string) {
         downloadUrl: "https://www.orimi.com/pdf-test.pdf",
         downloads: 12,
         isFree: true,
+        canDownload: true,
+        canView: true,
         createdAt: new Date().toISOString(),
       },
     ];
@@ -275,6 +277,28 @@ export async function toggleFileFreeStatus(id: string, isFree: boolean): Promise
   await updateDoc(doc(db, "files", id), { isFree });
 }
 
+export async function toggleFileDownloadStatus(id: string, canDownload: boolean): Promise<void> {
+  if (useLocalStorage) {
+    const items = getLocalItems<FileItem>("files").map((f) =>
+      f.id === id ? { ...f, canDownload } : f
+    );
+    setLocalItems("files", items);
+    return;
+  }
+  await updateDoc(doc(db, "files", id), { canDownload });
+}
+
+export async function toggleFileViewStatus(id: string, canView: boolean): Promise<void> {
+  if (useLocalStorage) {
+    const items = getLocalItems<FileItem>("files").map((f) =>
+      f.id === id ? { ...f, canView } : f
+    );
+    setLocalItems("files", items);
+    return;
+  }
+  await updateDoc(doc(db, "files", id), { canView });
+}
+
 export async function toggleAssessmentFreeStatus(id: string, isFree: boolean): Promise<void> {
   if (useLocalStorage) {
     const items = getLocalItems<Assessment>("assessments").map((a) =>
@@ -320,7 +344,15 @@ export async function getFilesBySubject(subjectId: string): Promise<FileItem[]> 
 export async function createFile(data: Omit<FileItem, "id" | "createdAt" | "downloads">): Promise<FileItem> {
   if (useLocalStorage) {
     const items = getLocalItems<FileItem>("files");
-    const newItem: FileItem = { id: generateId(), ...data, isFree: data.isFree ?? true, downloads: 0, createdAt: new Date().toISOString() };
+    const newItem: FileItem = {
+      id: generateId(),
+      ...data,
+      isFree: data.isFree ?? true,
+      canDownload: data.canDownload ?? true,
+      canView: data.canView ?? true,
+      downloads: 0,
+      createdAt: new Date().toISOString(),
+    };
     items.unshift(newItem);
     setLocalItems("files", items);
     return newItem;
@@ -328,10 +360,20 @@ export async function createFile(data: Omit<FileItem, "id" | "createdAt" | "down
   const ref = await addDoc(collection(db, "files"), {
     ...data,
     isFree: data.isFree ?? true,
+    canDownload: data.canDownload ?? true,
+    canView: data.canView ?? true,
     downloads: 0,
     createdAt: serverTimestamp(),
   });
-  return { id: ref.id, ...data, isFree: data.isFree ?? true, downloads: 0, createdAt: new Date().toISOString() };
+  return {
+    id: ref.id,
+    ...data,
+    isFree: data.isFree ?? true,
+    canDownload: data.canDownload ?? true,
+    canView: data.canView ?? true,
+    downloads: 0,
+    createdAt: new Date().toISOString(),
+  };
 }
 
 export async function incrementFileDownloads(id: string): Promise<void> {
@@ -468,4 +510,213 @@ export async function activateSubject(userId: string, subjectId: string, code: s
   }
   
   return true;
+}
+
+// ─── Student Management ─────────────────────────────────────────
+
+export async function getStudents(): Promise<Student[]> {
+  if (useLocalStorage) {
+    return getLocalItems<Student>("students");
+  }
+  const snapshot = await getDocs(collection(db, "students"));
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Student));
+}
+
+export async function createStudent(data: {
+  username: string;
+  password: string;
+  displayName: string;
+  enrolledSubjects: string[];
+}): Promise<Student> {
+  if (useLocalStorage) {
+    const items = getLocalItems<Student>("students");
+    const newItem: Student = {
+      id: generateId(),
+      username: data.username,
+      password: data.password,
+      displayName: data.displayName,
+      isActive: true,
+      enrolledSubjects: data.enrolledSubjects,
+      devices: [],
+      createdAt: new Date().toISOString(),
+    };
+    items.push(newItem);
+    setLocalItems("students", items);
+    return newItem;
+  }
+  const ref = await addDoc(collection(db, "students"), {
+    ...data,
+    isActive: true,
+    devices: [],
+    createdAt: serverTimestamp(),
+  });
+  return {
+    id: ref.id,
+    ...data,
+    isActive: true,
+    devices: [],
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export async function updateStudent(
+  id: string,
+  data: { displayName?: string; password?: string; enrolledSubjects?: string[]; isActive?: boolean }
+): Promise<void> {
+  if (useLocalStorage) {
+    const items = getLocalItems<Student>("students").map((s) =>
+      s.id === id ? { ...s, ...data } : s
+    );
+    setLocalItems("students", items);
+    return;
+  }
+  await updateDoc(doc(db, "students", id), data);
+}
+
+export async function deleteStudent(id: string): Promise<void> {
+  if (useLocalStorage) {
+    const items = getLocalItems<Student>("students").filter((s) => s.id !== id);
+    setLocalItems("students", items);
+    return;
+  }
+  await deleteDoc(doc(db, "students", id));
+}
+
+export async function getStudentByUsername(username: string): Promise<Student | null> {
+  if (useLocalStorage) {
+    const items = getLocalItems<Student>("students");
+    return items.find((s) => s.username === username) || null;
+  }
+  const q = query(collection(db, "students"), where("username", "==", username));
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return null;
+  const d = snapshot.docs[0];
+  return { id: d.id, ...d.data() } as Student;
+}
+
+export async function verifyStudentCredentials(
+  username: string,
+  password: string,
+  subjectId: string
+): Promise<{ valid: boolean; student: Student | null; error?: string }> {
+  const student = await getStudentByUsername(username);
+  if (!student) {
+    return { valid: false, student: null, error: "اسم المستخدم غير صحيح" };
+  }
+  if (!student.isActive) {
+    return { valid: false, student: null, error: "هذا الحساب غير نشط، يرجى التواصل مع الأدمن" };
+  }
+  if (student.password !== password) {
+    return { valid: false, student: null, error: "كلمة السر غير صحيحة" };
+  }
+  if (!student.enrolledSubjects.includes(subjectId)) {
+    return { valid: false, student: null, error: "أنت غير مشترك في هذه المادة" };
+  }
+  return { valid: true, student };
+}
+
+export async function registerDevice(
+  studentId: string,
+  deviceInfo: DeviceInfo
+): Promise<{ success: boolean; error?: string }> {
+  if (useLocalStorage) {
+    const items = getLocalItems<Student>("students");
+    const idx = items.findIndex((s) => s.id === studentId);
+    if (idx === -1) return { success: false, error: "الطالب غير موجود" };
+
+    const student = items[idx];
+    const existingDevice = student.devices.find((d) => d.deviceId === deviceInfo.deviceId);
+    if (existingDevice) {
+      // تحديث تاريخ آخر وصول
+      student.devices = student.devices.map((d) =>
+        d.deviceId === deviceInfo.deviceId
+          ? { ...d, lastAccess: deviceInfo.lastAccess }
+          : d
+      );
+      items[idx] = student;
+      setLocalItems("students", items);
+      return { success: true };
+    }
+
+    if (student.devices.length >= 2) {
+      return {
+        success: false,
+        error: "لقد وصلت للحد الأقصى من الأجهزة المسموح بها (2). يرجى التواصل مع الأدمن لإزالة أحد أجهزتك",
+      };
+    }
+
+    student.devices.push(deviceInfo);
+    items[idx] = student;
+    setLocalItems("students", items);
+    return { success: true };
+  }
+
+  // Firestore
+  const studentRef = doc(db, "students", studentId);
+  const studentSnap = await getDoc(studentRef);
+  if (!studentSnap.exists()) return { success: false, error: "الطالب غير موجود" };
+
+  const studentData = studentSnap.data() as Student;
+  const devices = studentData.devices || [];
+
+  const existingIdx = devices.findIndex((d: DeviceInfo) => d.deviceId === deviceInfo.deviceId);
+  if (existingIdx !== -1) {
+    devices[existingIdx] = { ...devices[existingIdx], lastAccess: deviceInfo.lastAccess };
+    await updateDoc(studentRef, { devices });
+    return { success: true };
+  }
+
+  if (devices.length >= 2) {
+    return {
+      success: false,
+      error: "لقد وصلت للحد الأقصى من الأجهزة المسموح بها (2). يرجى التواصل مع الأدمن لإزالة أحد أجهزتك",
+    };
+  }
+
+  devices.push(deviceInfo);
+  await updateDoc(studentRef, { devices });
+  return { success: true };
+}
+
+export async function removeDevice(studentId: string, deviceId: string): Promise<void> {
+  if (useLocalStorage) {
+    const items = getLocalItems<Student>("students").map((s) =>
+      s.id === studentId
+        ? { ...s, devices: s.devices.filter((d) => d.deviceId !== deviceId) }
+        : s
+    );
+    setLocalItems("students", items);
+    return;
+  }
+  const studentRef = doc(db, "students", studentId);
+  const studentSnap = await getDoc(studentRef);
+  if (!studentSnap.exists()) return;
+  const studentData = studentSnap.data() as Student;
+  const devices = (studentData.devices || []).filter((d: DeviceInfo) => d.deviceId !== deviceId);
+  await updateDoc(studentRef, { devices });
+}
+
+export function getDeviceId(): string {
+  let deviceId = localStorage.getItem("a-plus-device-id");
+  if (!deviceId) {
+    deviceId = crypto.randomUUID();
+    localStorage.setItem("a-plus-device-id", deviceId);
+  }
+  return deviceId;
+}
+
+export function getDeviceName(): string {
+  const ua = navigator.userAgent;
+  let browser = "متصفح غير معروف";
+  if (ua.includes("Chrome")) browser = "Chrome";
+  else if (ua.includes("Firefox")) browser = "Firefox";
+  else if (ua.includes("Safari")) browser = "Safari";
+  else if (ua.includes("Edge")) browser = "Edge";
+  let os = "نظام غير معروف";
+  if (ua.includes("Windows")) os = "Windows";
+  else if (ua.includes("Mac")) os = "Mac";
+  else if (ua.includes("Linux")) os = "Linux";
+  else if (ua.includes("Android")) os = "Android";
+  else if (ua.includes("iPhone") || ua.includes("iPad")) os = "iOS";
+  return `${browser} - ${os}`;
 }

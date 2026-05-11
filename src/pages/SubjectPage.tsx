@@ -37,6 +37,9 @@ import {
   Trash2,
   Lock,
   Unlock,
+  User,
+  Key,
+  LogIn,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import toast from "react-hot-toast";
@@ -53,11 +56,15 @@ import {
   deleteAssessment,
   getLocalProgress,
   toggleLocalProgress,
-  activateSubject,
-  getUserProfile,
   toggleVideoFreeStatus,
   toggleFileFreeStatus,
+  toggleFileDownloadStatus,
+  toggleFileViewStatus,
   toggleAssessmentFreeStatus,
+  verifyStudentCredentials,
+  registerDevice,
+  getDeviceId,
+  getDeviceName,
 } from "@/services/firestore";
 import type { Subject, Video, FileItem, Assessment } from "@/types";
 
@@ -76,7 +83,7 @@ function extractYouTubeId(url: string): string | null {
 
 export default function SubjectPage() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuthStore();
+  const { user, studentSession } = useAuthStore();
   const isAdmin = user?.role === "admin";
 
   const [subject, setSubject] = useState<Subject | null>(null);
@@ -85,9 +92,12 @@ export default function SubjectPage() {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [completedItems, setCompletedItems] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isEnrolled, setIsEnrolled] = useState(false);
-  const [activationCode, setActivationCode] = useState("");
-  const [activating, setActivating] = useState(false);
+  const [hasSubjectAccess, setHasSubjectAccess] = useState(false);
+  const [accessDialogOpen, setAccessDialogOpen] = useState(false);
+  const [accessUsername, setAccessUsername] = useState("");
+  const [accessPassword, setAccessPassword] = useState("");
+  const [accessSubmitting, setAccessSubmitting] = useState(false);
+  const [accessError, setAccessError] = useState("");
 
   const [videoOpen, setVideoOpen] = useState(false);
   const [fileOpen, setFileOpen] = useState(false);
@@ -112,6 +122,8 @@ export default function SubjectPage() {
     size: "",
     downloadUrl: "",
     isFree: true,
+    canDownload: true,
+    canView: true,
   });
 
   const [assessmentForm, setAssessmentForm] = useState({
@@ -140,10 +152,9 @@ export default function SubjectPage() {
       setAssessments(tests);
       if (user) {
         setCompletedItems(getLocalProgress(user.uid));
-        const profile = await getUserProfile(user.uid);
-        if (profile.enrolled_subjects?.includes(id)) {
-          setIsEnrolled(true);
-        }
+      }
+      if (studentSession && id && studentSession.enrolledSubjects.includes(id)) {
+        setHasSubjectAccess(true);
       }
     } catch (e) {
       toast.error("حدث خطأ في تحميل البيانات");
@@ -152,23 +163,66 @@ export default function SubjectPage() {
     }
   };
 
-  const handleActivation = async () => {
-    if (!user) {
-      toast.error("يرجى تسجيل الدخول أولاً");
-      return;
-    }
-    if (!activationCode.trim() || !id) return;
-    setActivating(true);
+  const openAccessDialog = () => {
+    setAccessUsername("");
+    setAccessPassword("");
+    setAccessError("");
+    setAccessDialogOpen(true);
+  };
+
+  const handleAccessSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accessUsername.trim() || !accessPassword.trim() || !id) return;
+    setAccessSubmitting(true);
+    setAccessError("");
     try {
-      await activateSubject(user.uid, id, activationCode);
-      toast.success("تم تفعيل المادة بنجاح!");
-      setIsEnrolled(true);
-      setActivationCode("");
+      const result = await verifyStudentCredentials(accessUsername, accessPassword, id);
+      if (!result.valid || !result.student) {
+        setAccessError(result.error || "بيانات الدخول غير صحيحة");
+        setAccessSubmitting(false);
+        return;
+      }
+
+      // Register device
+      const deviceId = getDeviceId();
+      const deviceName = getDeviceName();
+      const deviceResult = await registerDevice(result.student.id, {
+        deviceId,
+        deviceName,
+        userAgent: navigator.userAgent,
+        lastAccess: new Date().toISOString(),
+        approvedAt: new Date().toISOString(),
+      });
+
+      if (!deviceResult.success) {
+        setAccessError(deviceResult.error || "حدث خطأ في تسجيل الجهاز");
+        setAccessSubmitting(false);
+        return;
+      }
+
+      // Save student session
+      useAuthStore.getState().setStudentSession({
+        username: result.student.username,
+        displayName: result.student.displayName,
+        enrolledSubjects: result.student.enrolledSubjects,
+        deviceId,
+        loggedInAt: new Date().toISOString(),
+      });
+
+      toast.success(`مرحباً ${result.student.displayName}!`);
+      setHasSubjectAccess(true);
+      setAccessDialogOpen(false);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "كود التفعيل غير صحيح");
+      setAccessError("حدث خطأ أثناء تسجيل الدخول");
     } finally {
-      setActivating(false);
+      setAccessSubmitting(false);
     }
+  };
+
+  const handleLogout = () => {
+    useAuthStore.getState().setStudentSession(null);
+    setHasSubjectAccess(false);
+    toast.success("تم تسجيل الخروج");
   };
 
   const handleToggleProgress = (itemId: string) => {
@@ -222,10 +276,12 @@ export default function SubjectPage() {
         size: fileForm.size || undefined,
         downloadUrl: fileForm.downloadUrl,
         isFree: fileForm.isFree,
+        canDownload: fileForm.canDownload,
+        canView: fileForm.canView,
       });
       toast.success("تم إضافة الملف بنجاح");
       setFileOpen(false);
-      setFileForm({ title: "", fileType: "pdf", size: "", downloadUrl: "", isFree: true });
+      setFileForm({ title: "", fileType: "pdf", size: "", downloadUrl: "", isFree: true, canDownload: true, canView: true });
       await loadData();
     } catch (e) {
       toast.error("حدث خطأ أثناء إضافة الملف");
@@ -289,6 +345,26 @@ export default function SubjectPage() {
     }
   };
 
+  const handleToggleFileDownload = async (fileId: string, current: boolean) => {
+    try {
+      await toggleFileDownloadStatus(fileId, !current);
+      toast.success(!current ? "تم تفعيل التحميل" : "تم تعطيل التحميل");
+      await loadData();
+    } catch (e) {
+      toast.error("حدث خطأ أثناء تغيير الحالة");
+    }
+  };
+
+  const handleToggleFileView = async (fileId: string, current: boolean) => {
+    try {
+      await toggleFileViewStatus(fileId, !current);
+      toast.success(!current ? "تم تفعيل المشاهدة" : "تم تعطيل المشاهدة");
+      await loadData();
+    } catch (e) {
+      toast.error("حدث خطأ أثناء تغيير الحالة");
+    }
+  };
+
   const handleToggleAssessmentFree = async (assessmentId: string, currentIsFree: boolean) => {
     try {
       await toggleAssessmentFreeStatus(assessmentId, !currentIsFree);
@@ -346,35 +422,38 @@ export default function SubjectPage() {
             <p className="mt-2 text-lg opacity-90">{subject.description}</p>
           )}
 
-          {!isAdmin && !isEnrolled && (
+          {!isAdmin && !hasSubjectAccess && (
             <Card className="mt-6 glass border-white/10 text-white max-w-md">
               <CardContent className="p-4 flex flex-col gap-3">
                 <p className="font-semibold flex items-center gap-2">
                   <Lock className="h-5 w-5" />
-                  قم بتفعيل المادة للوصول للمحتوى المغلق
+                  المحتوى المغلق يحتاج إلى تسجيل دخول الطالب
                 </p>
-                <div className="flex gap-2">
-                  <Input
-                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                    placeholder="كود التفعيل"
-                    value={activationCode}
-                    onChange={(e) => setActivationCode(e.target.value)}
-                  />
-                  <Button
-                    variant="secondary"
-                    onClick={handleActivation}
-                    disabled={activating || !activationCode.trim()}
-                  >
-                    {activating ? "جاري التفعيل..." : "تفعيل"}
-                  </Button>
-                </div>
+                <Button
+                  variant="secondary"
+                  onClick={openAccessDialog}
+                  className="gap-2"
+                >
+                  <LogIn className="h-4 w-4" />
+                  تسجيل الدخول لعرض المحتوى
+                </Button>
               </CardContent>
             </Card>
           )}
-          {!isAdmin && isEnrolled && (
-             <div className="mt-6 flex items-center gap-2 text-green-400 font-medium">
-               <Unlock className="h-5 w-5" />
-               تم تفعيل المادة بالكامل
+          {!isAdmin && hasSubjectAccess && (
+             <div className="mt-6 flex items-center gap-4">
+               <div className="flex items-center gap-2 text-green-400 font-medium">
+                 <Unlock className="h-5 w-5" />
+                 تم تسجيل الدخول بنجاح — {studentSession?.displayName}
+               </div>
+               <Button
+                 variant="ghost"
+                 size="sm"
+                 onClick={handleLogout}
+                 className="text-white/70 hover:text-white"
+               >
+                 تسجيل خروج
+               </Button>
              </div>
           )}
         </div>
@@ -480,8 +559,9 @@ export default function SubjectPage() {
                     isCompleted={completedItems.includes(video.id)}
                     onToggleComplete={handleToggleProgress}
                     color={subject.color}
-                    isEnrolled={isEnrolled}
+                    hasSubjectAccess={hasSubjectAccess}
                     onToggleFree={handleToggleFree}
+                    onOpenAccess={openAccessDialog}
                   />
                 ))}
               </div>
@@ -521,8 +601,9 @@ export default function SubjectPage() {
                     isCompleted={completedItems.includes(video.id)}
                     onToggleComplete={handleToggleProgress}
                     color={subject.color}
-                    isEnrolled={isEnrolled}
+                    hasSubjectAccess={hasSubjectAccess}
                     onToggleFree={handleToggleFree}
+                    onOpenAccess={openAccessDialog}
                   />
                 ))}
               </div>
@@ -574,6 +655,26 @@ export default function SubjectPage() {
                         />
                         <Label htmlFor="fileIsFree">ملف مجاني (متاح للجميع)</Label>
                       </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="fileCanDownload"
+                          checked={fileForm.canDownload}
+                          onChange={(e) => setFileForm({ ...fileForm, canDownload: e.target.checked })}
+                          className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                        <Label htmlFor="fileCanDownload">متاح للتحميل</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="fileCanView"
+                          checked={fileForm.canView}
+                          onChange={(e) => setFileForm({ ...fileForm, canView: e.target.checked })}
+                          className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                        <Label htmlFor="fileCanView">متاح للمشاهدة المباشرة</Label>
+                      </div>
                       <Button type="submit" className="w-full" disabled={submitting}>
                         {submitting ? "جاري الإضافة..." : "إضافة الملف"}
                       </Button>
@@ -594,8 +695,11 @@ export default function SubjectPage() {
                     isCompleted={completedItems.includes(file.id)}
                     onToggleComplete={handleToggleProgress}
                     color={subject.color}
-                    isEnrolled={isEnrolled}
+                    hasSubjectAccess={hasSubjectAccess}
                     onToggleFree={handleToggleFileFree}
+                    onToggleDownload={handleToggleFileDownload}
+                    onToggleView={handleToggleFileView}
+                    onOpenAccess={openAccessDialog}
                   />
                 ))}
               </div>
@@ -635,8 +739,9 @@ export default function SubjectPage() {
                     isCompleted={completedItems.includes(video.id)}
                     onToggleComplete={handleToggleProgress}
                     color={subject.color}
-                    isEnrolled={isEnrolled}
+                    hasSubjectAccess={hasSubjectAccess}
                     onToggleFree={handleToggleFree}
+                    onOpenAccess={openAccessDialog}
                   />
                 ))}
               </div>
@@ -707,8 +812,9 @@ export default function SubjectPage() {
                     isCompleted={completedItems.includes(test.id)}
                     onToggleComplete={handleToggleProgress}
                     color={subject.color}
-                    isEnrolled={isEnrolled}
+                    hasSubjectAccess={hasSubjectAccess}
                     onToggleFree={handleToggleAssessmentFree}
+                    onOpenAccess={openAccessDialog}
                   />
                 ))}
               </div>
@@ -781,6 +887,66 @@ export default function SubjectPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Content Access Dialog */}
+      <Dialog open={accessDialogOpen} onOpenChange={(open) => {
+        if (!open) setAccessDialogOpen(false);
+      }}>
+        <DialogContent className="max-w-sm" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <LogIn className="h-5 w-5" />
+              تسجيل دخول الطالب
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAccessSubmit} className="space-y-4 mt-4">
+            <div>
+              <Label htmlFor="access-username" className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                اسم المستخدم
+              </Label>
+              <Input
+                id="access-username"
+                value={accessUsername}
+                onChange={(e) => setAccessUsername(e.target.value)}
+                placeholder="أدخل اسم المستخدم"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="access-password" className="flex items-center gap-2">
+                <Key className="h-4 w-4" />
+                كلمة السر
+              </Label>
+              <Input
+                id="access-password"
+                type="password"
+                value={accessPassword}
+                onChange={(e) => setAccessPassword(e.target.value)}
+                placeholder="أدخل كلمة السر"
+                required
+              />
+            </div>
+            {accessError && (
+              <p className="text-sm text-red-500 font-medium">{accessError}</p>
+            )}
+            <Button
+              type="submit"
+              className="w-full gap-2"
+              disabled={accessSubmitting}
+            >
+              {accessSubmitting ? (
+                "جاري التحقق..."
+              ) : (
+                <>
+                  <LogIn className="h-4 w-4" />
+                  دخول
+                </>
+              )}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* PDF Preview Dialog */}
       <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
         <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0">
@@ -811,8 +977,9 @@ function VideoCard({
   isCompleted,
   onToggleComplete,
   color,
-  isEnrolled,
+  hasSubjectAccess,
   onToggleFree,
+  onOpenAccess,
 }: {
   video: Video;
   isActive: boolean;
@@ -822,21 +989,20 @@ function VideoCard({
   isCompleted: boolean;
   onToggleComplete: (id: string) => void;
   color: string;
-  isEnrolled: boolean;
+  hasSubjectAccess: boolean;
   onToggleFree: (videoId: string, currentIsFree: boolean) => void;
+  onOpenAccess: () => void;
 }) {
   const youtubeId = video.sourceType === "youtube" ? extractYouTubeId(video.url) : null;
   const isTelegram = video.sourceType === "telegram";
   
-  const canPlay = isAdmin || video.isFree || isEnrolled;
+  const canPlay = isAdmin || video.isFree || hasSubjectAccess;
 
   const handlePlayClick = () => {
     if (canPlay) {
       onPlay();
     } else {
-      toast.error("هذا المحتوى للمشتركين فقط، يرجى تفعيل المادة");
-      // Optional: scroll to top to show the activation box
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      onOpenAccess();
     }
   };
 
@@ -985,8 +1151,11 @@ function FileCard({
   isCompleted,
   onToggleComplete,
   color,
-  isEnrolled,
+  hasSubjectAccess,
   onToggleFree,
+  onToggleDownload,
+  onToggleView,
+  onOpenAccess,
 }: {
   file: FileItem;
   onPreview: (file: FileItem) => void;
@@ -995,10 +1164,13 @@ function FileCard({
   isCompleted: boolean;
   onToggleComplete: (id: string) => void;
   color: string;
-  isEnrolled: boolean;
+  hasSubjectAccess: boolean;
   onToggleFree: (fileId: string, currentIsFree: boolean) => void;
+  onToggleDownload: (fileId: string, current: boolean) => void;
+  onToggleView: (fileId: string, current: boolean) => void;
+  onOpenAccess: () => void;
 }) {
-  const canAccess = isAdmin || file.isFree || isEnrolled;
+  const canAccess = isAdmin || file.isFree || hasSubjectAccess;
 
   return (
     <Card className={`hover:border-primary/50 transition-all group ${!canAccess ? 'opacity-80' : ''}`}>
@@ -1026,6 +1198,18 @@ function FileCard({
             <p className="text-xs text-muted-foreground">
               {file.fileType.toUpperCase()} {file.size && `• ${file.size}`}
             </p>
+            <div className="flex items-center gap-2 mt-1">
+              {file.isFree && !isAdmin && (
+                <span className="rounded bg-green-500/90 px-1.5 py-0.5 text-[10px] text-white font-bold">
+                  مجاني
+                </span>
+              )}
+              {file.canDownload && (
+                <span className="rounded bg-orange-500/90 px-1.5 py-0.5 text-[10px] text-white font-bold">
+                  تحميل
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
@@ -1034,28 +1218,29 @@ function FileCard({
               <Lock className="h-4 w-4" />
             </div>
           )}
-          {file.isFree && !isAdmin && (
-            <span className="rounded bg-green-500/90 px-2 py-0.5 text-xs text-white font-bold">
-              مجاني
-            </span>
-          )}
           {canAccess ? (
             <>
               <Button size="sm" variant="ghost" onClick={() => onPreview(file)} className="gap-1">
                 <Eye className="h-4 w-4" />
                 <span className="hidden sm:inline">معاينة</span>
               </Button>
-              <Button size="sm" variant="outline" asChild className="gap-1">
-                <a href={file.downloadUrl} target="_blank" rel="noopener noreferrer" download>
-                  <Download className="h-4 w-4" />
-                  تحميل
-                </a>
-              </Button>
+              {file.canDownload && (
+                <Button
+                  size="sm"
+                  className="gap-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                  asChild
+                >
+                  <a href={file.downloadUrl} target="_blank" rel="noopener noreferrer" download>
+                    <Download className="h-4 w-4" />
+                    تحميل
+                  </a>
+                </Button>
+              )}
             </>
           ) : (
-            <Button size="sm" variant="secondary" disabled className="gap-1 opacity-60">
+            <Button size="sm" variant="secondary" onClick={onOpenAccess} className="gap-1">
               <Lock className="h-4 w-4" />
-              قم بتفعيل المادة
+              تسجيل دخول
             </Button>
           )}
           {isAdmin && (
@@ -1068,6 +1253,24 @@ function FileCard({
                 title={file.isFree ? 'تحويل للمشتركين فقط' : 'تحويل لمجاني'}
               >
                 {file.isFree ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className={`p-2 h-auto ${file.canDownload ? 'text-orange-600 hover:text-orange-800' : 'text-muted-foreground hover:text-orange-600'}`}
+                onClick={() => onToggleDownload(file.id, !!file.canDownload)}
+                title={file.canDownload ? 'تعطيل التحميل' : 'تفعيل التحميل'}
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className={`p-2 h-auto ${file.canView ? 'text-blue-600 hover:text-blue-800' : 'text-muted-foreground hover:text-blue-600'}`}
+                onClick={() => onToggleView(file.id, !!file.canView)}
+                title={file.canView ? 'تعطيل المشاهدة' : 'تفعيل المشاهدة'}
+              >
+                <Eye className="h-4 w-4" />
               </Button>
               <Button size="sm" variant="destructive" onClick={() => onDelete(file.id)}>
                 <Trash2 className="h-4 w-4" />
@@ -1087,8 +1290,9 @@ function AssessmentCard({
   isCompleted,
   onToggleComplete,
   color,
-  isEnrolled,
+  hasSubjectAccess,
   onToggleFree,
+  onOpenAccess,
 }: {
   assessment: Assessment;
   onDelete: (id: string) => void;
@@ -1096,10 +1300,11 @@ function AssessmentCard({
   isCompleted: boolean;
   onToggleComplete: (id: string) => void;
   color: string;
-  isEnrolled: boolean;
+  hasSubjectAccess: boolean;
   onToggleFree: (assessmentId: string, currentIsFree: boolean) => void;
+  onOpenAccess: () => void;
 }) {
-  const canAccess = isAdmin || assessment.isFree || isEnrolled;
+  const canAccess = isAdmin || assessment.isFree || hasSubjectAccess;
 
   return (
     <Card className={`hover:border-primary/50 transition-all ${!canAccess ? 'opacity-80' : ''}`}>
@@ -1147,9 +1352,9 @@ function AssessmentCard({
               </a>
             </Button>
           ) : (
-            <Button size="sm" variant="secondary" disabled className="gap-1 opacity-60">
+            <Button size="sm" variant="secondary" onClick={onOpenAccess} className="gap-1">
               <Lock className="h-4 w-4" />
-              <span className="hidden sm:inline">قم بتفعيل المادة</span>
+              <span className="hidden sm:inline">تسجيل دخول</span>
             </Button>
           )}
           {isAdmin && (
