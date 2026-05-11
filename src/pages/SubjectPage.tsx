@@ -442,9 +442,9 @@ export default function SubjectPage() {
           )}
           {!isAdmin && hasSubjectAccess && (
              <div className="mt-6 flex items-center gap-4">
-               <div className="flex items-center gap-2 text-green-400 font-medium">
-                 <Unlock className="h-5 w-5" />
-                 تم تسجيل الدخول بنجاح — {studentSession?.displayName}
+               <div className="flex items-center gap-2 font-medium">
+                 <Unlock className="h-5 w-5 text-green-400" />
+                 <span className="text-foreground">تم تسجيل الدخول — {studentSession?.displayName}</span>
                </div>
                <Button
                  variant="ghost"
@@ -547,7 +547,7 @@ export default function SubjectPage() {
             </div>
 
             {theoryVideos.length > 0 ? (
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 grid-cols-1">
                 {theoryVideos.map((video) => (
                   <VideoCard
                     key={video.id}
@@ -589,7 +589,7 @@ export default function SubjectPage() {
               )}
             </div>
             {reviewVideos.length > 0 ? (
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 grid-cols-1">
                 {reviewVideos.map((video) => (
                   <VideoCard
                     key={video.id}
@@ -727,7 +727,7 @@ export default function SubjectPage() {
               )}
             </div>
             {practicalVideos.length > 0 ? (
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 grid-cols-1">
                 {practicalVideos.map((video) => (
                   <VideoCard
                     key={video.id}
@@ -1052,93 +1052,111 @@ function VideoCard({
 
   return (
     <Card
-      className={`group cursor-pointer overflow-hidden transition-all duration-300 hover:shadow-xl relative card-3d ${!canPlay ? 'opacity-80' : ''} glass`}
+      className={`group cursor-pointer overflow-hidden transition-all duration-300 hover:shadow-xl card-3d ${!canPlay ? 'opacity-80' : ''} glass`}
       onClick={handlePlayClick}
+      style={{ borderColor: color + '30' }}
     >
-      <div className="relative aspect-video bg-muted">
-        {video.thumbnail ? (
-          <img src={video.thumbnail} alt={video.title} className="h-full w-full object-cover" />
-        ) : youtubeId ? (
-          <img
-            src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`}
-            alt={video.title}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
-            {video.sourceType === "youtube" ? (
-              <Youtube className="h-12 w-12 text-red-500" />
-            ) : (
-              <Play className="h-12 w-12 text-primary/60" />
-            )}
+      <div className="flex flex-row">
+        {/* Thumbnail */}
+        <div className="relative w-48 shrink-0 bg-muted">
+          {video.thumbnail ? (
+            <img src={video.thumbnail} alt={video.title} className="h-full w-full object-cover" />
+          ) : youtubeId ? (
+            <img
+              src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`}
+              alt={video.title}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
+              {video.sourceType === "youtube" ? (
+                <Youtube className="h-10 w-10 text-red-500" />
+              ) : (
+                <Play className="h-10 w-10 text-primary/60" />
+              )}
+            </div>
+          )}
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg">
+              {canPlay ? (
+                 <Play className="h-5 w-5 ml-0.5" style={{ color: color }} />
+              ) : (
+                 <Lock className="h-5 w-5" style={{ color: color }} />
+              )}
+            </div>
           </div>
-        )}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 shadow-lg">
-            {canPlay ? (
-               <Play className="h-6 w-6 ml-0.5" style={{ color: color }} />
-            ) : (
-               <Lock className="h-6 w-6" style={{ color: color }} />
-            )}
-          </div>
+          {!canPlay && (
+            <div className="absolute top-2 left-2 rounded-full bg-black/60 p-1 shadow-sm text-white backdrop-blur-md">
+              <Lock className="h-3 w-3" />
+            </div>
+          )}
+          {video.isFree && !isAdmin && (
+            <div className="absolute top-2 left-2 rounded bg-green-500/90 px-1.5 py-0.5 text-[10px] text-white shadow-sm font-bold">
+              متاح للجميع
+            </div>
+          )}
+          {video.duration && (
+            <div className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">
+              {video.duration}
+            </div>
+          )}
         </div>
-        {!canPlay && (
-          <div className="absolute top-2 left-2 rounded-full bg-black/60 p-1.5 shadow-sm text-white backdrop-blur-md">
-            <Lock className="h-4 w-4" />
+
+        {/* Info */}
+        <CardContent className="flex-1 p-4 flex flex-col justify-between min-w-0">
+          <div>
+            <p className="font-semibold text-sm line-clamp-2">{video.title}</p>
+            <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+              {video.type === "theory" && <span>شرح</span>}
+              {video.type === "review" && <span>مراجعة</span>}
+              {video.type === "practical" && <span>عملي</span>}
+              {video.sourceType === "youtube" && <Youtube className="h-3 w-3 text-red-500" />}
+              {video.sourceType === "telegram" && <span>Telegram</span>}
+            </div>
           </div>
-        )}
-        {video.isFree && !isAdmin && (
-          <div className="absolute top-2 left-2 rounded bg-green-500/90 px-2 py-0.5 text-xs text-white shadow-sm font-bold">
-            متاح للجميع
+          <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center gap-2">
+              {isAdmin && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className={`p-1.5 h-auto ${video.isFree ? 'text-green-600 hover:text-orange-600' : 'text-orange-600 hover:text-green-600'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleFree(video.id, !!video.isFree);
+                    }}
+                    title={video.isFree ? 'تحويل للمشتركين فقط' : 'تحويل لمجاني'}
+                  >
+                    {video.isFree ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive p-1.5 h-auto"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(video.id);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleComplete(video.id);
+              }}
+              className="transition-colors"
+              style={{ color: isCompleted ? color : "currentColor" }}
+            >
+              {isCompleted ? <CheckCircle2 className="h-6 w-6" /> : <Circle className="h-6 w-6 text-muted-foreground" />}
+            </button>
           </div>
-        )}
-        {video.duration && (
-          <div className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-0.5 text-xs text-white">
-            {video.duration}
-          </div>
-        )}
-        {isCompleted && (
-          <div className="absolute top-2 right-2 rounded-full bg-white p-1 shadow-sm">
-            <CheckCircle2 className="h-5 w-5" style={{ color: color }} />
-          </div>
-        )}
+        </CardContent>
       </div>
-      <CardContent className="p-3 flex justify-between items-center">
-        <div className="flex-1">
-          <p className="font-semibold text-sm line-clamp-2">{video.title}</p>
-          <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-            {video.sourceType === "youtube" && <Youtube className="h-3 w-3 text-red-500" />}
-            {video.sourceType === "telegram" && <span>Telegram</span>}
-          </div>
-        </div>
-        {isAdmin && (
-          <div className="flex items-center gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              className={`p-2 h-auto ${video.isFree ? 'text-green-600 hover:text-orange-600 hover:bg-orange-50' : 'text-orange-600 hover:text-green-600 hover:bg-green-50'}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleFree(video.id, !!video.isFree);
-              }}
-              title={video.isFree ? 'تحويل للمشتركين فقط' : 'تحويل لمجاني'}
-            >
-              {video.isFree ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-destructive hover:text-destructive hover:bg-destructive/10 p-2 h-auto"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(video.id);
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-      </CardContent>
     </Card>
   );
 }
