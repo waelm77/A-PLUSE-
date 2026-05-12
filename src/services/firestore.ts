@@ -31,58 +31,6 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
 
-// One-time migration from localStorage to Firestore
-export async function migrateLocalStorageToFirestore() {
-  if (useLocalStorage) return;
-  const migrated = localStorage.getItem("a-plus-migrated");
-  if (migrated === "true") return;
-
-  const localSubjects = getLocalItems<Subject>("subjects");
-  const localVideos = getLocalItems<Video>("videos");
-  const localFiles = getLocalItems<FileItem>("files");
-  const localAssessments = getLocalItems<Assessment>("assessments");
-  const localStudents = getLocalItems<Student>("students");
-
-  if (
-    localSubjects.length === 0 &&
-    localVideos.length === 0 &&
-    localFiles.length === 0 &&
-    localAssessments.length === 0 &&
-    localStudents.length === 0
-  ) {
-    localStorage.setItem("a-plus-migrated", "true");
-    return;
-  }
-
-  for (const subject of localSubjects) {
-    const { id, createdAt, ...data } = subject;
-    await setDoc(doc(db, "subjects", id), { ...data, createdAt: serverTimestamp() });
-  }
-
-  for (const video of localVideos) {
-    const { id, createdAt, ...data } = video;
-    await setDoc(doc(db, "videos", id), { ...data, createdAt: serverTimestamp() });
-  }
-
-  for (const file of localFiles) {
-    const { id, createdAt, ...data } = file;
-    await setDoc(doc(db, "files", id), { ...data, createdAt: serverTimestamp() });
-  }
-
-  for (const assessment of localAssessments) {
-    const { id, createdAt, ...data } = assessment;
-    await setDoc(doc(db, "assessments", id), { ...data, createdAt: serverTimestamp() });
-  }
-
-  for (const student of localStudents) {
-    const { id, createdAt, ...data } = student;
-    await setDoc(doc(db, "students", id), { ...data, createdAt: serverTimestamp() });
-  }
-
-  localStorage.setItem("a-plus-migrated", "true");
-  console.log("LocalStorage → Firestore migration complete");
-}
-
 // Seed default subjects if none exist
 export async function seedSubjects() {
   if (useLocalStorage) {
@@ -100,15 +48,7 @@ export async function seedSubjects() {
   }
   const existing = await getSubjects();
   if (existing.length === 0) {
-    const defaults: Omit<Subject, "id" | "createdAt">[] = [
-      { name: "الكيمياء العامة", description: "شرح شامل لمبادئ الكيمياء لطلاب السنة التحضيرية", color: "#00BCD4", icon: "FlaskConical", code: "chem101" },
-      { name: "الفيزياء العامة", description: "أساسيات الفيزياء الميكانيكية والكهربائية", color: "#3F51B5", icon: "Atom", code: "phys101" },
-      { name: "الكيمياء الحيوية", description: "دراسة العمليات الكيميائية داخل الكائنات الحية", color: "#E91E63", icon: "Dna", code: "biochem101" },
-      { name: "التشريح", description: "دراسة بنية جسم الإنسان وأنظمته المختلفة", color: "#F44336", icon: "Heart", code: "anat101" },
-    ];
-    for (const subject of defaults) {
-      await createSubject(subject);
-    }
+    // Firebase path - no automatic seeding needed
   }
 }
 
@@ -259,7 +199,7 @@ export async function getAllVideos(): Promise<Video[]> {
 export async function getVideosBySubject(subjectId: string): Promise<Video[]> {
   if (useLocalStorage) {
     const items = getLocalItems<Video>("videos").filter((v) => v.subjectId === subjectId);
-    return items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
   const q = query(
     collection(db, "videos"),
@@ -275,7 +215,7 @@ export async function getVideosBySubject(subjectId: string): Promise<Video[]> {
         createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
       } as Video;
     })
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 export async function createVideo(data: Omit<Video, "id" | "createdAt">): Promise<Video> {
@@ -370,7 +310,7 @@ export async function getAllFiles(): Promise<FileItem[]> {
 export async function getFilesBySubject(subjectId: string): Promise<FileItem[]> {
   if (useLocalStorage) {
     const items = getLocalItems<FileItem>("files").filter((f) => f.subjectId === subjectId);
-    return items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
   const q = query(
     collection(db, "files"),
@@ -386,7 +326,7 @@ export async function getFilesBySubject(subjectId: string): Promise<FileItem[]> 
         createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
       } as FileItem;
     })
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 export async function createFile(data: Omit<FileItem, "id" | "createdAt" | "downloads">): Promise<FileItem> {
