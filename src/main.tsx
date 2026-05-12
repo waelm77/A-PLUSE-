@@ -11,8 +11,16 @@ import '@/lib/firebase'
 import { seedSubjects, migrateLocalStorageToFirestore } from '@/services/firestore'
 
 async function init() {
-  await migrateLocalStorageToFirestore();
-  await seedSubjects();
+  try {
+    await migrateLocalStorageToFirestore();
+  } catch (e) {
+    console.error("Migration failed (non-fatal):", e);
+  }
+  try {
+    await seedSubjects();
+  } catch (e) {
+    console.error("Seed failed (non-fatal):", e);
+  }
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <BrowserRouter>
