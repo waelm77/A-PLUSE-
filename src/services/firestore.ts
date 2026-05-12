@@ -199,7 +199,7 @@ export async function getAllVideos(): Promise<Video[]> {
 export async function getVideosBySubject(subjectId: string): Promise<Video[]> {
   if (useLocalStorage) {
     const items = getLocalItems<Video>("videos").filter((v) => v.subjectId === subjectId);
-    return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }
   const q = query(
     collection(db, "videos"),
@@ -215,7 +215,7 @@ export async function getVideosBySubject(subjectId: string): Promise<Video[]> {
         createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
       } as Video;
     })
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 }
 
 export async function createVideo(data: Omit<Video, "id" | "createdAt">): Promise<Video> {
@@ -310,7 +310,7 @@ export async function getAllFiles(): Promise<FileItem[]> {
 export async function getFilesBySubject(subjectId: string): Promise<FileItem[]> {
   if (useLocalStorage) {
     const items = getLocalItems<FileItem>("files").filter((f) => f.subjectId === subjectId);
-    return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }
   const q = query(
     collection(db, "files"),
@@ -326,7 +326,7 @@ export async function getFilesBySubject(subjectId: string): Promise<FileItem[]> 
         createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
       } as FileItem;
     })
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 }
 
 export async function createFile(data: Omit<FileItem, "id" | "createdAt" | "downloads">): Promise<FileItem> {
