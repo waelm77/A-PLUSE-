@@ -218,6 +218,14 @@ export async function getVideosBySubject(subjectId: string): Promise<Video[]> {
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 }
 
+function clean<T extends Record<string, unknown>>(obj: T): T {
+  const cleaned = { ...obj } as Record<string, unknown>;
+  for (const key of Object.keys(cleaned)) {
+    if (cleaned[key] === undefined) delete cleaned[key];
+  }
+  return cleaned as T;
+}
+
 export async function createVideo(data: Omit<Video, "id" | "createdAt">): Promise<Video> {
   if (useLocalStorage) {
     const items = getLocalItems<Video>("videos");
@@ -226,8 +234,9 @@ export async function createVideo(data: Omit<Video, "id" | "createdAt">): Promis
     setLocalItems("videos", items);
     return newItem;
   }
+  const cleaned = clean(data);
   const ref = await addDoc(collection(db, "videos"), {
-    ...data,
+    ...cleaned,
     isFree: data.isFree ?? true,
     createdAt: serverTimestamp(),
   });
@@ -346,7 +355,7 @@ export async function createFile(data: Omit<FileItem, "id" | "createdAt" | "down
     return newItem;
   }
   const ref = await addDoc(collection(db, "files"), {
-    ...data,
+    ...clean(data),
     isFree: data.isFree ?? true,
     canDownload: data.canDownload ?? true,
     canView: data.canView ?? true,
