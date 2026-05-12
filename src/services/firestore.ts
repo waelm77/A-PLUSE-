@@ -172,35 +172,51 @@ async function seedContent(subjectId: string) {
   }
 }
 
+const defaultSubjects: Subject[] = [
+  { id: "default-chem101", name: "الكيمياء العامة", description: "شرح شامل لمبادئ الكيمياء لطلاب السنة التحضيرية", color: "#00BCD4", icon: "FlaskConical", code: "chem101", createdAt: new Date().toISOString() },
+  { id: "default-phys101", name: "الفيزياء العامة", description: "أساسيات الفيزياء الميكانيكية والكهربائية", color: "#3F51B5", icon: "Atom", code: "phys101", createdAt: new Date().toISOString() },
+  { id: "default-biochem101", name: "الكيمياء الحيوية", description: "دراسة العمليات الكيميائية داخل الكائنات الحية", color: "#E91E63", icon: "Dna", code: "biochem101", createdAt: new Date().toISOString() },
+  { id: "default-anat101", name: "التشريح", description: "دراسة بنية جسم الإنسان وأنظمته المختلفة", color: "#F44336", icon: "Heart", code: "anat101", createdAt: new Date().toISOString() },
+];
+
+let fallbackMode = false;
+
 // Subjects
 export async function getSubjects(): Promise<Subject[]> {
   if (useLocalStorage) {
     return getLocalItems<Subject>("subjects");
   }
-  const snapshot = await getDocs(collection(db, "subjects"));
-  const subjects = snapshot.docs
-    .map((d) => {
-      const data = d.data();
-      return {
-        id: d.id,
-        ...data,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-      } as Subject;
-    })
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  if (subjects.length === 0) {
-    const defaults: Omit<Subject, "id" | "createdAt">[] = [
-      { name: "الكيمياء العامة", description: "شرح شامل لمبادئ الكيمياء لطلاب السنة التحضيرية", color: "#00BCD4", icon: "FlaskConical", code: "chem101" },
-      { name: "الفيزياء العامة", description: "أساسيات الفيزياء الميكانيكية والكهربائية", color: "#3F51B5", icon: "Atom", code: "phys101" },
-      { name: "الكيمياء الحيوية", description: "دراسة العمليات الكيميائية داخل الكائنات الحية", color: "#E91E63", icon: "Dna", code: "biochem101" },
-      { name: "التشريح", description: "دراسة بنية جسم الإنسان وأنظمته المختلفة", color: "#F44336", icon: "Heart", code: "anat101" },
-    ];
-    for (const subject of defaults) {
-      await createSubject(subject);
+  if (fallbackMode) return defaultSubjects;
+  try {
+    const snapshot = await getDocs(collection(db, "subjects"));
+    const subjects = snapshot.docs
+      .map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+        } as Subject;
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    if (subjects.length === 0) {
+      const defaults: Omit<Subject, "id" | "createdAt">[] = [
+        { name: "الكيمياء العامة", description: "شرح شامل لمبادئ الكيمياء لطلاب السنة التحضيرية", color: "#00BCD4", icon: "FlaskConical", code: "chem101" },
+        { name: "الفيزياء العامة", description: "أساسيات الفيزياء الميكانيكية والكهربائية", color: "#3F51B5", icon: "Atom", code: "phys101" },
+        { name: "الكيمياء الحيوية", description: "دراسة العمليات الكيميائية داخل الكائنات الحية", color: "#E91E63", icon: "Dna", code: "biochem101" },
+        { name: "التشريح", description: "دراسة بنية جسم الإنسان وأنظمته المختلفة", color: "#F44336", icon: "Heart", code: "anat101" },
+      ];
+      for (const subject of defaults) {
+        await createSubject(subject);
+      }
+      return getSubjects();
     }
-    return getSubjects();
+    return subjects;
+  } catch (e) {
+    console.error("Firestore getSubjects failed, using fallback:", e);
+    fallbackMode = true;
+    return defaultSubjects;
   }
-  return subjects;
 }
 
 export async function getSubjectById(id: string): Promise<Subject | null> {
