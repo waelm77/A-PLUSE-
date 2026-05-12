@@ -157,6 +157,7 @@ export default function SubjectPage() {
         setHasSubjectAccess(true);
       }
     } catch (e) {
+      console.error("loadData error:", e);
       toast.error("حدث خطأ في تحميل البيانات");
     } finally {
       setLoading(false);
@@ -213,6 +214,7 @@ export default function SubjectPage() {
       setHasSubjectAccess(true);
       setAccessDialogOpen(false);
     } catch (e) {
+      console.error("Login error:", e);
       setAccessError("حدث خطأ أثناء تسجيل الدخول");
     } finally {
       setAccessSubmitting(false);
@@ -258,6 +260,7 @@ export default function SubjectPage() {
       setVideoForm({ title: "", type: "theory", sourceType: "youtube", url: "", thumbnail: "", duration: "", isFree: true });
       await loadData();
     } catch (e) {
+      console.error("Add video error:", e);
       toast.error("حدث خطأ أثناء إضافة الفيديو");
     } finally {
       setSubmitting(false);
@@ -284,6 +287,7 @@ export default function SubjectPage() {
       setFileForm({ title: "", fileType: "pdf", size: "", downloadUrl: "", isFree: true, canDownload: true, canView: true });
       await loadData();
     } catch (e) {
+      console.error("Add file error:", e);
       toast.error("حدث خطأ أثناء إضافة الملف");
     } finally {
       setSubmitting(false);

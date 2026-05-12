@@ -507,7 +507,10 @@ export async function getStudents(): Promise<Student[]> {
     return getLocalItems<Student>("students");
   }
   const snapshot = await getDocs(collection(db, "students"));
-  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Student));
+  return snapshot.docs.map((d) => {
+    const data = d.data();
+    return { id: d.id, ...data, createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString() } as Student;
+  });
 }
 
 export async function createStudent(data: {
@@ -579,7 +582,8 @@ export async function getStudentByUsername(username: string): Promise<Student | 
   const snapshot = await getDocs(q);
   if (snapshot.empty) return null;
   const d = snapshot.docs[0];
-  return { id: d.id, ...d.data() } as Student;
+  const data = d.data();
+  return { id: d.id, ...data, createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString() } as Student;
 }
 
 export async function verifyStudentCredentials(
@@ -687,7 +691,11 @@ export async function removeDevice(studentId: string, deviceId: string): Promise
 export function getDeviceId(): string {
   let deviceId = localStorage.getItem("a-plus-device-id");
   if (!deviceId) {
-    deviceId = crypto.randomUUID();
+    try {
+      deviceId = crypto.randomUUID();
+    } catch {
+      deviceId = Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+    }
     localStorage.setItem("a-plus-device-id", deviceId);
   }
   return deviceId;

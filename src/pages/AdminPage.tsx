@@ -202,6 +202,7 @@ export default function AdminPage() {
       setStudentDialogOpen(false);
       await loadStudents();
     } catch (e) {
+      console.error("Save student error:", e);
       toast.error("حدث خطأ أثناء حفظ الطالب");
     } finally {
       setStudentSubmitting(false);
