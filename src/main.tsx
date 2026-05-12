@@ -11,6 +11,14 @@ import '@/lib/firebase'
 import { seedSubjects, migrateLocalStorageToFirestore } from '@/services/firestore'
 
 async function init() {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </StrictMode>,
+  );
+  // Run migration and seeding after render so UI appears immediately
   try {
     await migrateLocalStorageToFirestore();
   } catch (e) {
@@ -21,12 +29,5 @@ async function init() {
   } catch (e) {
     console.error("Seed failed (non-fatal):", e);
   }
-  createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </StrictMode>,
-  );
 }
 init();
