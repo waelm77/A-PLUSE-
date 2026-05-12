@@ -15,19 +15,7 @@ import {
 import { db } from "../lib/firebase";
 import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo } from "../types";
 
-let useLocalStorage = true;
-
-try {
-  const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
-  if (apiKey && apiKey !== "YOUR_API_KEY" && apiKey.length >= 10 && import.meta.env.VITE_USE_FIREBASE === "true") {
-    useLocalStorage = false;
-    console.log("Firebase configured. Using Firestore.");
-  } else {
-    console.log("Using LocalStorage (add VITE_USE_FIREBASE=true to .env to enable Firebase).");
-  }
-} catch (e) {
-  console.error("Error detecting environment:", e);
-}
+let useLocalStorage = false;
 
 // LocalStorage helpers
 function getLocalItems<T>(key: string): T[] {
