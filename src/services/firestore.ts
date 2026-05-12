@@ -98,18 +98,7 @@ export async function seedSubjects() {
     seedContent(defaults[0].id);
     return;
   }
-  const existing = await getSubjects();
-  if (existing.length === 0) {
-    const defaults: Omit<Subject, "id" | "createdAt">[] = [
-      { name: "الكيمياء العامة", description: "شرح شامل لمبادئ الكيمياء لطلاب السنة التحضيرية", color: "#00BCD4", icon: "FlaskConical", code: "chem101" },
-      { name: "الفيزياء العامة", description: "أساسيات الفيزياء الميكانيكية والكهربائية", color: "#3F51B5", icon: "Atom", code: "phys101" },
-      { name: "الكيمياء الحيوية", description: "دراسة العمليات الكيميائية داخل الكائنات الحية", color: "#E91E63", icon: "Dna", code: "biochem101" },
-      { name: "التشريح", description: "دراسة بنية جسم الإنسان وأنظمته المختلفة", color: "#F44336", icon: "Heart", code: "anat101" },
-    ];
-    for (const subject of defaults) {
-      await createSubject(subject);
-    }
-  }
+  // Firebase seeding is handled by getSubjects() on first call
 }
 
 async function seedContent(subjectId: string) {
@@ -189,7 +178,7 @@ export async function getSubjects(): Promise<Subject[]> {
     return getLocalItems<Subject>("subjects");
   }
   const snapshot = await getDocs(collection(db, "subjects"));
-  return snapshot.docs
+  const subjects = snapshot.docs
     .map((d) => {
       const data = d.data();
       return {
@@ -199,6 +188,19 @@ export async function getSubjects(): Promise<Subject[]> {
       } as Subject;
     })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  if (subjects.length === 0) {
+    const defaults: Omit<Subject, "id" | "createdAt">[] = [
+      { name: "الكيمياء العامة", description: "شرح شامل لمبادئ الكيمياء لطلاب السنة التحضيرية", color: "#00BCD4", icon: "FlaskConical", code: "chem101" },
+      { name: "الفيزياء العامة", description: "أساسيات الفيزياء الميكانيكية والكهربائية", color: "#3F51B5", icon: "Atom", code: "phys101" },
+      { name: "الكيمياء الحيوية", description: "دراسة العمليات الكيميائية داخل الكائنات الحية", color: "#E91E63", icon: "Dna", code: "biochem101" },
+      { name: "التشريح", description: "دراسة بنية جسم الإنسان وأنظمته المختلفة", color: "#F44336", icon: "Heart", code: "anat101" },
+    ];
+    for (const subject of defaults) {
+      await createSubject(subject);
+    }
+    return getSubjects();
+  }
+  return subjects;
 }
 
 export async function getSubjectById(id: string): Promise<Subject | null> {
