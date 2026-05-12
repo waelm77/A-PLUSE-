@@ -3,13 +3,13 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDWkfygjx9Ju2nU08T6aFIQNovLcFI0bOY",
-  authDomain: "apluswebsite-dd47a.firebaseapp.com",
-  projectId: "apluswebsite-dd47a",
-  storageBucket: "apluswebsite-dd47a.firebasestorage.app",
-  messagingSenderId: "557329894023",
-  appId: "1:557329894023:web:172080af9e2a6dc6ee4622",
-  measurementId: "G-BGPY6YLCMB"
+  apiKey: "AIzaSyBXsww4lsHZdLF_YEdvrgPJy228GGEKYlI",
+  authDomain: "wael-educatinal-website.firebaseapp.com",
+  projectId: "wael-educatinal-website",
+  storageBucket: "wael-educatinal-website.firebasestorage.app",
+  messagingSenderId: "598561318270",
+  appId: "1:598561318270:web:e01695ba0339d26f90bf2f",
+  measurementId: "G-SMBXPYLXE8"
 };
 
 const app = initializeApp(firebaseConfig);
