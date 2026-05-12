@@ -7,14 +7,18 @@ import App from './App.tsx'
 // Import Firebase (this initializes the connection)
 import '@/lib/firebase'
 
-// Seed data synchronously before first render so subjects appear immediately
-import { seedSubjects } from '@/services/firestore'
-seedSubjects()
+// Seed data before first render so subjects appear immediately
+import { seedSubjects, migrateLocalStorageToFirestore } from '@/services/firestore'
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
-  </StrictMode>,
-)
+async function init() {
+  await migrateLocalStorageToFirestore();
+  await seedSubjects();
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </StrictMode>,
+  );
+}
+init();
