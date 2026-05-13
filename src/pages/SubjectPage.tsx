@@ -432,6 +432,7 @@ export default function SubjectPage() {
               <TickerBar
                 text={subject.tickerText}
                 color={subject.tickerColor || "#FFD700"}
+                bgColor={subject.tickerBgColor || "#1a1a2e"}
                 active={true}
                 speed={subject.tickerSpeed || 20}
               />

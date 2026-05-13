@@ -82,6 +82,7 @@ export default function AdminPage() {
     code: "",
     tickerText: "",
     tickerColor: "#FFD700",
+    tickerBgColor: "#1a1a2e",
     tickerActive: false,
     tickerSpeed: 20,
   });
@@ -127,7 +128,7 @@ export default function AdminPage() {
   const [devicesDialogStudent, setDevicesDialogStudent] = useState<Student | null>(null);
 
   // ─── Ticker State ──
-  const [ticker, setTicker] = useState<Ticker>({ text: "", color: "#FFD700", active: false, speed: 20 });
+  const [ticker, setTicker] = useState<Ticker>({ text: "", color: "#FFD700", bgColor: "#1a1a2e", active: false, speed: 20 });
   const [tickerLoading, setTickerLoading] = useState(true);
   const [tickerSaving, setTickerSaving] = useState(false);
 
@@ -177,12 +178,13 @@ export default function AdminPage() {
         code: subject.code,
         tickerText: subject.tickerText || "",
         tickerColor: subject.tickerColor || "#FFD700",
+        tickerBgColor: subject.tickerBgColor || "#1a1a2e",
         tickerActive: subject.tickerActive || false,
         tickerSpeed: subject.tickerSpeed || 20,
       });
     } else {
       setEditingSubject(null);
-      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerActive: false, tickerSpeed: 20 });
+      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20 });
     }
     setOpen(true);
   };
@@ -200,6 +202,7 @@ export default function AdminPage() {
         code: form.code,
         tickerText: form.tickerText || "",
         tickerColor: form.tickerColor || "#FFD700",
+        tickerBgColor: form.tickerBgColor || "#1a1a2e",
         tickerActive: form.tickerActive || false,
         tickerSpeed: form.tickerSpeed || 20,
       };
@@ -212,7 +215,7 @@ export default function AdminPage() {
       }
       setOpen(false);
       setEditingSubject(null);
-      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerActive: false, tickerSpeed: 20 });
+      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20 });
       await loadData();
     } catch (e) {
       toast.error(editingSubject ? "حدث خطأ أثناء التعديل" : "حدث خطأ أثناء الإضافة");
@@ -513,6 +516,22 @@ export default function AdminPage() {
                           </div>
                         </div>
                         <div>
+                          <Label>لون الخلفية</Label>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {["#1a1a2e", "#16213e", "#0f3460", "#2d2d2d", "#1a1a1a", "#0d0d0d", "#2c1810", "#1a1a2e", "#1e3a5f", "#2d1b69"].map((c) => (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => setForm({ ...form, tickerBgColor: c })}
+                                className={`h-8 w-8 rounded-full border-2 transition-all ${
+                                  form.tickerBgColor === c ? "border-white scale-110" : "border-transparent"
+                                }`}
+                                style={{ backgroundColor: c }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <div>
                           <Label>سرعة الحركة ({form.tickerSpeed} ثانية)</Label>
                           <input
                             type="range"
@@ -806,6 +825,22 @@ export default function AdminPage() {
                             onClick={() => setTicker({ ...ticker, color: c })}
                             className={`h-8 w-8 rounded-full border-2 transition-all ${
                               ticker.color === c ? "border-black scale-110" : "border-transparent"
+                            }`}
+                            style={{ backgroundColor: c }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <Label>لون الخلفية</Label>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {["#1a1a2e", "#16213e", "#0f3460", "#2d2d2d", "#1a1a1a", "#0d0d0d", "#2c1810", "#1a1a2e", "#1e3a5f", "#2d1b69"].map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => setTicker({ ...ticker, bgColor: c })}
+                            className={`h-8 w-8 rounded-full border-2 transition-all ${
+                              ticker.bgColor === c ? "border-white scale-110" : "border-transparent"
                             }`}
                             style={{ backgroundColor: c }}
                           />

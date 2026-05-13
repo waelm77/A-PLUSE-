@@ -8,6 +8,7 @@ export interface Subject {
   createdAt: string;
   tickerText?: string;
   tickerColor?: string;
+  tickerBgColor?: string;
   tickerActive?: boolean;
   tickerSpeed?: number;
 }
@@ -85,6 +86,7 @@ export interface StudentFormData {
 export interface Ticker {
   text: string;
   color: string;
+  bgColor?: string;
   active: boolean;
   speed?: number;
 }

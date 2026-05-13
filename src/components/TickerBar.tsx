@@ -5,11 +5,12 @@ import type { Ticker as TickerType } from "@/types";
 interface TickerBarProps {
   text?: string;
   color?: string;
+  bgColor?: string;
   active?: boolean;
   speed?: number;
 }
 
-export default function TickerBar({ text, color, active, speed }: TickerBarProps) {
+export default function TickerBar({ text, color, bgColor, active, speed }: TickerBarProps) {
   const [globalTicker, setGlobalTicker] = useState<TickerType | null>(null);
 
   useEffect(() => {
@@ -19,7 +20,7 @@ export default function TickerBar({ text, color, active, speed }: TickerBarProps
   }, [text]);
 
   const ticker = text !== undefined
-    ? { text, color: color || "#FFD700", active: active !== false, speed: speed || 20 }
+    ? { text, color: color || "#FFD700", bgColor: bgColor || "#1a1a2e", active: active !== false, speed: speed || 20 }
     : globalTicker;
 
   if (!ticker || !ticker.active || !ticker.text.trim()) return null;
@@ -29,14 +30,14 @@ export default function TickerBar({ text, color, active, speed }: TickerBarProps
   return (
     <div
       className="overflow-hidden whitespace-nowrap rounded-lg py-2 px-4 text-sm font-medium"
-      style={{ backgroundColor: ticker.color + "20", color: ticker.color, border: `1px solid ${ticker.color}40` }}
+      style={{ backgroundColor: ticker.bgColor || "#1a1a2e", color: ticker.color, border: `1px solid ${ticker.color}40` }}
     >
-      <div className="inline-block" style={{ animation: `marquee ${duration} linear infinite`, whiteSpace: "nowrap" }}>
+      <div dir="ltr" className="inline-block" style={{ minWidth: "100%", animation: `marquee ${duration} linear infinite`, whiteSpace: "nowrap" }}>
         {ticker.text}
       </div>
       <style>{`
         @keyframes marquee {
-          0% { transform: translateX(100vw); }
+          0% { transform: translateX(100%); }
           100% { transform: translateX(-100%); }
         }
       `}</style>
