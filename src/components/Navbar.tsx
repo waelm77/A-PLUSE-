@@ -63,7 +63,7 @@ export default function Navbar() {
             </>
           ) : (
             <Button size="sm" onClick={() => navigate("/login")}>
-              تسجيل الدخول
+              تسجيل دخول Admin
             </Button>
           )}
         </div>

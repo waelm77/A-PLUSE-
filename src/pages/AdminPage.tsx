@@ -34,6 +34,7 @@ import {
   CheckCircle2,
   XCircle,
   Edit,
+  ScrollText,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import toast from "react-hot-toast";
@@ -41,6 +42,7 @@ import {
   getSubjects,
   createSubject,
   deleteSubject,
+  updateSubject,
   getAllVideos,
   getAllFiles,
   getStudents,
@@ -48,9 +50,11 @@ import {
   updateStudent,
   deleteStudent,
   removeDevice,
+  getTicker,
+  updateTicker,
 } from "@/services/firestore";
 import { AVAILABLE_ICONS, COLORS } from "@/lib/constants";
-import type { Subject, Student } from "@/types";
+import type { Subject, Student, Ticker } from "@/types";
 
 export default function AdminPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
@@ -69,6 +73,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -76,6 +81,32 @@ export default function AdminPage() {
     icon: "BookOpen",
     code: "",
   });
+
+  // ─── Ticker handlers ──
+  const loadTicker = async () => {
+    try {
+      const data = await getTicker();
+      setTicker(data);
+    } catch (e) {
+      console.error("Load ticker error:", e);
+    } finally {
+      setTickerLoading(false);
+    }
+  };
+
+  const handleTickerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTickerSaving(true);
+    try {
+      await updateTicker(ticker);
+      toast.success("تم حفظ الإعدادات");
+    } catch (e) {
+      console.error("Save ticker error:", e);
+      toast.error("حدث خطأ أثناء الحفظ");
+    } finally {
+      setTickerSaving(false);
+    }
+  };
 
   // ─── Students State ──
   const [students, setStudents] = useState<Student[]>([]);
@@ -91,9 +122,15 @@ export default function AdminPage() {
   const [studentSubmitting, setStudentSubmitting] = useState(false);
   const [devicesDialogStudent, setDevicesDialogStudent] = useState<Student | null>(null);
 
+  // ─── Ticker State ──
+  const [ticker, setTicker] = useState<Ticker>({ text: "", color: "#FFD700", active: false });
+  const [tickerLoading, setTickerLoading] = useState(true);
+  const [tickerSaving, setTickerSaving] = useState(false);
+
   useEffect(() => {
     loadData();
     loadStudents();
+    loadTicker();
   }, []);
 
   const loadData = async () => {
@@ -125,18 +162,35 @@ export default function AdminPage() {
   };
 
   // ─── Subject handlers ──
+  const openSubjectDialog = (subject?: Subject) => {
+    if (subject) {
+      setEditingSubject(subject);
+      setForm({ name: subject.name, description: subject.description, color: subject.color, icon: subject.icon, code: subject.code });
+    } else {
+      setEditingSubject(null);
+      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "" });
+    }
+    setOpen(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) return;
     setSubmitting(true);
     try {
-      await createSubject(form);
-      toast.success("تم إضافة المادة بنجاح");
+      if (editingSubject) {
+        await updateSubject(editingSubject.id, form);
+        toast.success("تم تعديل المادة بنجاح");
+      } else {
+        await createSubject(form);
+        toast.success("تم إضافة المادة بنجاح");
+      }
       setOpen(false);
+      setEditingSubject(null);
       setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "" });
       await loadData();
     } catch (e) {
-      toast.error("حدث خطأ أثناء الإضافة");
+      toast.error(editingSubject ? "حدث خطأ أثناء التعديل" : "حدث خطأ أثناء الإضافة");
     } finally {
       setSubmitting(false);
     }
@@ -288,6 +342,10 @@ export default function AdminPage() {
               <Users className="h-4 w-4" />
               إدارة الطلاب
             </TabsTrigger>
+            <TabsTrigger value="ticker" className="gap-2">
+              <ScrollText className="h-4 w-4" />
+              الشريط المتحرك
+            </TabsTrigger>
           </TabsList>
 
           {/* ════════ Subjects Tab ════════ */}
@@ -328,14 +386,14 @@ export default function AdminPage() {
             <Card className="glass border-none">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-xl font-bold">المواد الدراسية</CardTitle>
-                <Dialog open={open} onOpenChange={setOpen}>
-                  <Button size="sm" className="gap-1" onClick={() => setOpen(true)}>
+                <Dialog open={open} onOpenChange={(o) => { if (!o) { setEditingSubject(null); } setOpen(o); }}>
+                  <Button size="sm" className="gap-1" onClick={() => openSubjectDialog()}>
                     <Plus className="h-4 w-4" />
                     إضافة مادة
                   </Button>
                   <DialogContent className="max-w-md" dir="rtl">
                     <DialogHeader>
-                      <DialogTitle>إضافة مادة جديدة</DialogTitle>
+                      <DialogTitle>{editingSubject ? "تعديل المادة" : "إضافة مادة جديدة"}</DialogTitle>
                     </DialogHeader>
                     <form onSubmit={handleSubmit} className="space-y-4 mt-4">
                       <div>
@@ -406,7 +464,7 @@ export default function AdminPage() {
                         className="w-full"
                         disabled={submitting}
                       >
-                        {submitting ? "جاري الإضافة..." : "إضافة المادة"}
+                        {submitting ? "جاري الحفظ..." : editingSubject ? "حفظ التعديلات" : "إضافة المادة"}
                       </Button>
                     </form>
                   </DialogContent>
@@ -457,6 +515,13 @@ export default function AdminPage() {
                                 <div className="flex items-center gap-2">
                                   <Button size="sm" variant="outline" asChild>
                                     <Link to={`/subject/${subject.id}`}>عرض</Link>
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => openSubjectDialog(subject)}
+                                  >
+                                    <Edit className="h-4 w-4" />
                                   </Button>
                                   <Button
                                     size="sm"
@@ -628,6 +693,63 @@ export default function AdminPage() {
                   <p className="text-center text-muted-foreground py-8">
                     لا يوجد طلاب. اضغط على "إضافة طالب" لإنشاء طالب جديد.
                   </p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ════════ Ticker Tab ════════ */}
+          <TabsContent value="ticker">
+            <Card className="glass border-none">
+              <CardHeader>
+                <CardTitle className="text-xl font-bold">إعدادات الشريط المتحرك</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {tickerLoading ? (
+                  <div className="h-32 animate-pulse rounded bg-muted" />
+                ) : (
+                  <form onSubmit={handleTickerSubmit} className="space-y-4 max-w-lg">
+                    <div>
+                      <Label>النص (يدعم العربية والإنجليزية)</Label>
+                      <textarea
+                        value={ticker.text}
+                        onChange={(e) => setTicker({ ...ticker, text: e.target.value })}
+                        placeholder="اكتب النص هنا..."
+                        rows={3}
+                        className="mt-2 flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        dir="auto"
+                      />
+                    </div>
+                    <div>
+                      <Label>لون النص</Label>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {["#FFD700", "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#FF8C00", "#00CED1", "#FF1493"].map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => setTicker({ ...ticker, color: c })}
+                            className={`h-8 w-8 rounded-full border-2 transition-all ${
+                              ticker.color === c ? "border-black scale-110" : "border-transparent"
+                            }`}
+                            style={{ backgroundColor: c }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        id="ticker-active"
+                        checked={ticker.active}
+                        onChange={(e) => setTicker({ ...ticker, active: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <Label htmlFor="ticker-active" className="mb-0">إظهار الشريط في الصفحة الرئيسية</Label>
+                    </div>
+                    <Button type="submit" disabled={tickerSaving}>
+                      {tickerSaving ? "جاري الحفظ..." : "حفظ الإعدادات"}
+                    </Button>
+                  </form>
                 )}
               </CardContent>
             </Card>

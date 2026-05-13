@@ -13,7 +13,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo } from "../types";
+import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo, Ticker } from "../types";
 
 let useLocalStorage = false;
 
@@ -138,7 +138,7 @@ export async function getSubjects(): Promise<Subject[]> {
         createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
       } as Subject;
     })
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 }
 
 export async function getSubjectById(id: string): Promise<Subject | null> {
@@ -185,6 +185,17 @@ export async function deleteSubject(id: string): Promise<void> {
     return;
   }
   await deleteDoc(doc(db, "subjects", id));
+}
+
+export async function updateSubject(id: string, data: Partial<Omit<Subject, "id" | "createdAt">>): Promise<void> {
+  if (useLocalStorage) {
+    const items = getLocalItems<Subject>("subjects").map((s) =>
+      s.id === id ? { ...s, ...data } : s
+    );
+    setLocalItems("subjects", items);
+    return;
+  }
+  await updateDoc(doc(db, "subjects", id), data);
 }
 
 // Videos
@@ -724,4 +735,16 @@ export function getDeviceName(): string {
   else if (ua.includes("Android")) os = "Android";
   else if (ua.includes("iPhone") || ua.includes("iPad")) os = "iOS";
   return `${browser} - ${os}`;
+}
+
+// ─── Ticker ──────────────────────────────────────────
+
+export async function getTicker(): Promise<Ticker> {
+  const snap = await getDoc(doc(db, "settings", "ticker"));
+  if (!snap.exists()) return { text: "", color: "#FFD700", active: false };
+  return snap.data() as Ticker;
+}
+
+export async function updateTicker(data: Ticker): Promise<void> {
+  await setDoc(doc(db, "settings", "ticker"), data, { merge: true });
 }

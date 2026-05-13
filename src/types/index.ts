@@ -77,3 +77,9 @@ export interface StudentFormData {
   displayName: string;
   enrolledSubjects: string[];
 }
+
+export interface Ticker {
+  text: string;
+  color: string;
+  active: boolean;
+}

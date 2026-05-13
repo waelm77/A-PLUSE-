@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/authStore";
 import Navbar from "@/components/Navbar";
+import TickerBar from "@/components/TickerBar";
 import SubjectCard from "@/components/SubjectCard";
 import { Button } from "@/components/ui/button";
 import {
@@ -96,6 +97,9 @@ export default function Home() {
 
       {/* Subjects */}
       <section className="container mx-auto px-4 py-12">
+        <div className="mb-6">
+          <TickerBar />
+        </div>
         <div className="mb-8 flex items-center justify-between">
           <h2 className="text-3xl font-bold">المواد الدراسية</h2>
           {isAdmin && (
