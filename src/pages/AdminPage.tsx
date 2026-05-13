@@ -416,7 +416,7 @@ export default function AdminPage() {
                     <Plus className="h-4 w-4" />
                     إضافة مادة
                   </Button>
-                  <DialogContent className="max-w-md" dir="rtl">
+                  <DialogContent className="max-w-md overflow-y-auto max-h-[85vh]" dir="rtl">
                     <DialogHeader>
                       <DialogTitle>{editingSubject ? "تعديل المادة" : "إضافة مادة جديدة"}</DialogTitle>
                     </DialogHeader>
