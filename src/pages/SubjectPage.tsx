@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
+import TickerBar from "@/components/TickerBar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -424,6 +425,17 @@ export default function SubjectPage() {
           <h1 className="text-4xl font-black">{subject.name}</h1>
           {subject.description && (
             <p className="mt-2 text-lg opacity-90">{subject.description}</p>
+          )}
+
+          {subject.tickerActive && subject.tickerText && (
+            <div className="mt-4">
+              <TickerBar
+                text={subject.tickerText}
+                color={subject.tickerColor || "#FFD700"}
+                active={true}
+                speed={subject.tickerSpeed || 20}
+              />
+            </div>
           )}
 
           {!isAdmin && !hasSubjectAccess && (

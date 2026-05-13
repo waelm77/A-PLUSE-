@@ -80,6 +80,10 @@ export default function AdminPage() {
     color: COLORS[0],
     icon: "BookOpen",
     code: "",
+    tickerText: "",
+    tickerColor: "#FFD700",
+    tickerActive: false,
+    tickerSpeed: 20,
   });
 
   // ─── Ticker handlers ──
@@ -123,7 +127,7 @@ export default function AdminPage() {
   const [devicesDialogStudent, setDevicesDialogStudent] = useState<Student | null>(null);
 
   // ─── Ticker State ──
-  const [ticker, setTicker] = useState<Ticker>({ text: "", color: "#FFD700", active: false });
+  const [ticker, setTicker] = useState<Ticker>({ text: "", color: "#FFD700", active: false, speed: 20 });
   const [tickerLoading, setTickerLoading] = useState(true);
   const [tickerSaving, setTickerSaving] = useState(false);
 
@@ -165,10 +169,20 @@ export default function AdminPage() {
   const openSubjectDialog = (subject?: Subject) => {
     if (subject) {
       setEditingSubject(subject);
-      setForm({ name: subject.name, description: subject.description, color: subject.color, icon: subject.icon, code: subject.code });
+      setForm({
+        name: subject.name,
+        description: subject.description,
+        color: subject.color,
+        icon: subject.icon,
+        code: subject.code,
+        tickerText: subject.tickerText || "",
+        tickerColor: subject.tickerColor || "#FFD700",
+        tickerActive: subject.tickerActive || false,
+        tickerSpeed: subject.tickerSpeed || 20,
+      });
     } else {
       setEditingSubject(null);
-      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "" });
+      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerActive: false, tickerSpeed: 20 });
     }
     setOpen(true);
   };
@@ -178,16 +192,27 @@ export default function AdminPage() {
     if (!form.name.trim()) return;
     setSubmitting(true);
     try {
+      const subjectData = {
+        name: form.name,
+        description: form.description,
+        color: form.color,
+        icon: form.icon,
+        code: form.code,
+        tickerText: form.tickerText || "",
+        tickerColor: form.tickerColor || "#FFD700",
+        tickerActive: form.tickerActive || false,
+        tickerSpeed: form.tickerSpeed || 20,
+      };
       if (editingSubject) {
-        await updateSubject(editingSubject.id, form);
+        await updateSubject(editingSubject.id, subjectData);
         toast.success("تم تعديل المادة بنجاح");
       } else {
-        await createSubject(form);
+        await createSubject(subjectData);
         toast.success("تم إضافة المادة بنجاح");
       }
       setOpen(false);
       setEditingSubject(null);
-      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "" });
+      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerActive: false, tickerSpeed: 20 });
       await loadData();
     } catch (e) {
       toast.error(editingSubject ? "حدث خطأ أثناء التعديل" : "حدث خطأ أثناء الإضافة");
@@ -459,6 +484,61 @@ export default function AdminPage() {
                           ))}
                         </div>
                       </div>
+
+                      <details className="rounded-lg border p-3">
+                        <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
+                          الشريط المتحرك للمادة
+                        </summary>
+                        <div className="mt-3 space-y-3">
+                          <div>
+                            <Label>نص الشريط</Label>
+                            <Input
+                              value={form.tickerText}
+                              onChange={(e) => setForm({ ...form, tickerText: e.target.value })}
+                              placeholder="نص يظهر في شريط متحرك عند فتح المادة"
+                              dir="auto"
+                            />
+                          </div>
+                          <div>
+                            <Label>لون النص</Label>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {["#FFD700", "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#FF8C00", "#00CED1", "#FF1493"].map((c) => (
+                                <button
+                                  key={c}
+                                  type="button"
+                                  onClick={() => setForm({ ...form, tickerColor: c })}
+                                  className={`h-8 w-8 rounded-full border-2 transition-all ${
+                                    form.tickerColor === c ? "border-black scale-110" : "border-transparent"
+                                  }`}
+                                  style={{ backgroundColor: c }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <Label>سرعة الحركة ({form.tickerSpeed} ثانية)</Label>
+                            <input
+                              type="range"
+                              min="5"
+                              max="60"
+                              value={form.tickerSpeed}
+                              onChange={(e) => setForm({ ...form, tickerSpeed: Number(e.target.value) })}
+                              className="w-full mt-2"
+                            />
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              id="subject-ticker-active"
+                              checked={form.tickerActive}
+                              onChange={(e) => setForm({ ...form, tickerActive: e.target.checked })}
+                              className="w-4 h-4 rounded border-gray-300"
+                            />
+                            <Label htmlFor="subject-ticker-active" className="mb-0">إظهار الشريط في صفحة المادة</Label>
+                          </div>
+                        </div>
+                      </details>
+
                       <Button
                         type="submit"
                         className="w-full"
@@ -734,6 +814,21 @@ export default function AdminPage() {
                             style={{ backgroundColor: c }}
                           />
                         ))}
+                      </div>
+                    </div>
+                    <div>
+                      <Label>سرعة الحركة ({ticker.speed || 20} ثانية)</Label>
+                      <input
+                        type="range"
+                        min="5"
+                        max="60"
+                        value={ticker.speed || 20}
+                        onChange={(e) => setTicker({ ...ticker, speed: Number(e.target.value) })}
+                        className="w-full mt-2"
+                      />
+                      <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                        <span>سريع</span>
+                        <span>بطيء</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">

@@ -6,6 +6,10 @@ export interface Subject {
   icon: string;
   code: string;
   createdAt: string;
+  tickerText?: string;
+  tickerColor?: string;
+  tickerActive?: boolean;
+  tickerSpeed?: number;
 }
 
 export interface Video {
@@ -82,4 +86,5 @@ export interface Ticker {
   text: string;
   color: string;
   active: boolean;
+  speed?: number;
 }
