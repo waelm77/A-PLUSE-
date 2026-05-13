@@ -485,59 +485,55 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      <details className="rounded-lg border p-3">
-                        <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
-                          الشريط المتحرك للمادة
-                        </summary>
-                        <div className="mt-3 space-y-3">
-                          <div>
-                            <Label>نص الشريط</Label>
-                            <Input
-                              value={form.tickerText}
-                              onChange={(e) => setForm({ ...form, tickerText: e.target.value })}
-                              placeholder="نص يظهر في شريط متحرك عند فتح المادة"
-                              dir="auto"
-                            />
-                          </div>
-                          <div>
-                            <Label>لون النص</Label>
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              {["#FFD700", "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#FF8C00", "#00CED1", "#FF1493"].map((c) => (
-                                <button
-                                  key={c}
-                                  type="button"
-                                  onClick={() => setForm({ ...form, tickerColor: c })}
-                                  className={`h-8 w-8 rounded-full border-2 transition-all ${
-                                    form.tickerColor === c ? "border-black scale-110" : "border-transparent"
-                                  }`}
-                                  style={{ backgroundColor: c }}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <Label>سرعة الحركة ({form.tickerSpeed} ثانية)</Label>
-                            <input
-                              type="range"
-                              min="5"
-                              max="60"
-                              value={form.tickerSpeed}
-                              onChange={(e) => setForm({ ...form, tickerSpeed: Number(e.target.value) })}
-                              className="w-full mt-2"
-                            />
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              id="subject-ticker-active"
-                              checked={form.tickerActive}
-                              onChange={(e) => setForm({ ...form, tickerActive: e.target.checked })}
-                              className="w-4 h-4 rounded border-gray-300"
-                            />
-                            <Label htmlFor="subject-ticker-active" className="mb-0">إظهار الشريط في صفحة المادة</Label>
+                      <div className="rounded-lg border p-3 space-y-3">
+                        <p className="text-sm font-medium">الشريط المتحرك للمادة</p>
+                        <div>
+                          <Label>نص الشريط</Label>
+                          <Input
+                            value={form.tickerText}
+                            onChange={(e) => setForm({ ...form, tickerText: e.target.value })}
+                            placeholder="نص يظهر في شريط متحرك عند فتح المادة"
+                            dir="auto"
+                          />
+                        </div>
+                        <div>
+                          <Label>لون النص</Label>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {["#FFD700", "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#FF8C00", "#00CED1", "#FF1493"].map((c) => (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => setForm({ ...form, tickerColor: c })}
+                                className={`h-8 w-8 rounded-full border-2 transition-all ${
+                                  form.tickerColor === c ? "border-black scale-110" : "border-transparent"
+                                }`}
+                                style={{ backgroundColor: c }}
+                              />
+                            ))}
                           </div>
                         </div>
-                      </details>
+                        <div>
+                          <Label>سرعة الحركة ({form.tickerSpeed} ثانية)</Label>
+                          <input
+                            type="range"
+                            min="5"
+                            max="60"
+                            value={form.tickerSpeed}
+                            onChange={(e) => setForm({ ...form, tickerSpeed: Number(e.target.value) })}
+                            className="w-full mt-2"
+                          />
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            id="subject-ticker-active"
+                            checked={form.tickerActive}
+                            onChange={(e) => setForm({ ...form, tickerActive: e.target.checked })}
+                            className="w-4 h-4 rounded border-gray-300"
+                          />
+                          <Label htmlFor="subject-ticker-active" className="mb-0">إظهار الشريط في صفحة المادة</Label>
+                        </div>
+                      </div>
 
                       <Button
                         type="submit"

@@ -31,17 +31,13 @@ export default function TickerBar({ text, color, active, speed }: TickerBarProps
       className="overflow-hidden whitespace-nowrap rounded-lg py-2 px-4 text-sm font-medium"
       style={{ backgroundColor: ticker.color + "20", color: ticker.color, border: `1px solid ${ticker.color}40` }}
     >
-      <div className="inline-block marquee-content" style={{ animation: `marquee ${duration} linear infinite` }}>
-        <span>{ticker.text}</span>
-        <span className="mx-8">{ticker.text}</span>
+      <div className="inline-block" style={{ animation: `marquee ${duration} linear infinite`, whiteSpace: "nowrap" }}>
+        {ticker.text}
       </div>
       <style>{`
         @keyframes marquee {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        .marquee-content {
-          white-space: nowrap;
+          0% { transform: translateX(100%); }
+          100% { transform: translateX(-100%); }
         }
       `}</style>
     </div>
