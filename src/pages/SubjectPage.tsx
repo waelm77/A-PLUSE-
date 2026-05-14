@@ -1072,7 +1072,7 @@ function VideoCard({
 
   if (isActive && canPlay) {
     return (
-      <Card className="overflow-hidden glass" style={{ borderColor: color + '40', borderLeft: `6px solid ${typeColor}` }}>
+      <Card className="overflow-hidden glass" style={{ borderColor: color + '40' }}>
         <div style={{ height: "6px", backgroundColor: typeColor }} />
         <div className="aspect-video bg-black overflow-hidden">
           {youtubeId ? (
@@ -1119,7 +1119,7 @@ function VideoCard({
     <Card
       className={`group cursor-pointer overflow-hidden transition-all duration-300 hover:shadow-xl card-3d ${!canPlay ? 'opacity-80' : ''} glass`}
       onClick={handlePlayClick}
-      style={{ borderColor: color + '30', borderLeft: `6px solid ${typeColor}` }}
+      style={{ borderColor: color + '30', borderLeft: `3cm solid ${typeColor}` }}
     >
       <div className="flex flex-row">
         {/* Thumbnail */}
