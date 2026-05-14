@@ -1071,7 +1071,7 @@ function VideoCard({
 
   if (isActive && canPlay) {
     return (
-      <Card className="overflow-hidden glass" style={{ borderColor: color + '40' }}>
+      <Card className="overflow-hidden glass" style={{ borderColor: color + '40', borderLeft: `6px solid ${typeColor}` }}>
         <div style={{ height: "6px", backgroundColor: typeColor }} />
         <div className="aspect-video bg-black overflow-hidden">
           {youtubeId ? (
@@ -1118,11 +1118,11 @@ function VideoCard({
     <Card
       className={`group cursor-pointer overflow-hidden transition-all duration-300 hover:shadow-xl card-3d ${!canPlay ? 'opacity-80' : ''} glass`}
       onClick={handlePlayClick}
-      style={{ borderColor: color + '30' }}
+      style={{ borderColor: color + '30', borderLeft: `6px solid ${typeColor}` }}
     >
       <div className="flex flex-row">
         {/* Thumbnail */}
-        <div className="relative w-48 shrink-0" style={{ backgroundColor: typeColor + "20" }}>
+        <div className="relative w-48 shrink-0 bg-muted">
           {video.thumbnail ? (
             <img src={video.thumbnail} alt={video.title} className="h-full w-full object-cover" />
           ) : youtubeId ? (
@@ -1132,11 +1132,11 @@ function VideoCard({
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-full items-center justify-center" style={{ backgroundColor: typeColor + "30" }}>
+            <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
               {video.sourceType === "youtube" ? (
-                <Youtube className="h-10 w-10" style={{ color: typeColor }} />
+                <Youtube className="h-10 w-10 text-red-500" />
               ) : (
-                <Play className="h-10 w-10" style={{ color: typeColor }} />
+                <Play className="h-10 w-10 text-primary/60" />
               )}
             </div>
           )}
@@ -1198,6 +1198,7 @@ function VideoCard({
                   size="sm"
                   variant="ghost"
                   className="p-1.5 h-auto"
+                  title="تعديل الفيديو"
                   onClick={(e) => {
                     e.stopPropagation();
                     onEdit?.(video);
