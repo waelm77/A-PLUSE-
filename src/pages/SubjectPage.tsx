@@ -1062,6 +1062,7 @@ function VideoCard({
 }) {
   const youtubeId = video.sourceType === "youtube" ? extractYouTubeId(video.url) : null;
   const isTelegram = video.sourceType === "telegram";
+  const isDirectVideo = /\.(mp4|webm|ogg|mov|avi|mkv)(\?|$)/i.test(video.url);
   
   const canPlay = isAdmin || video.isFree || hasSubjectAccess;
 
@@ -1093,6 +1094,14 @@ function VideoCard({
               title={video.title}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
+            />
+          ) : isDirectVideo ? (
+            <video
+              className="h-full w-full"
+              src={video.url}
+              controls
+              autoPlay
+              playsInline
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center text-white">
