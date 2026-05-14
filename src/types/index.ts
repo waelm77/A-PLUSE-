@@ -23,6 +23,7 @@ export interface Video {
   url: string;
   thumbnail?: string;
   duration?: string;
+  color?: string;
   createdAt: string;
   order?: number;
   isFree?: boolean;

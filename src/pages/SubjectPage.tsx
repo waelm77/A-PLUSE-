@@ -107,6 +107,7 @@ export default function SubjectPage() {
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const VIDEO_COLORS = ["#3B82F6", "#22C55E", "#F97316", "#8B5CF6", "#EC4899", "#14B8A6", "#EAB308", "#84CC16", "#06B6D4", "#F43F5E"];
   const [videoForm, setVideoForm] = useState({
     title: "",
     type: "theory" as "theory" | "review" | "practical",
@@ -115,6 +116,7 @@ export default function SubjectPage() {
     thumbnail: "",
     duration: "",
     isFree: true,
+    color: "#3B82F6",
   });
 
   const [fileForm, setFileForm] = useState({
@@ -255,10 +257,11 @@ export default function SubjectPage() {
         thumbnail: videoForm.thumbnail || undefined,
         duration: videoForm.duration || undefined,
         isFree: videoForm.isFree,
+        color: videoForm.color || "#3B82F6",
       });
       toast.success("تم إضافة الفيديو بنجاح");
       setVideoOpen(false);
-      setVideoForm({ title: "", type: "theory", sourceType: "youtube", url: "", thumbnail: "", duration: "", isFree: true });
+      setVideoForm({ title: "", type: "theory", sourceType: "youtube", url: "", thumbnail: "", duration: "", isFree: true, color: "#3B82F6" });
       await loadData();
     } catch (e) {
       console.error("Add video error:", e);
@@ -888,6 +891,22 @@ export default function SubjectPage() {
                 required
               />
             </div>
+            <div>
+              <Label>اللون المميز</Label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {VIDEO_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setVideoForm({ ...videoForm, color: c })}
+                    className={`h-8 w-8 rounded-full border-2 transition-all ${
+                      videoForm.color === c ? "border-black scale-110" : "border-transparent"
+                    }`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+            </div>
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -986,12 +1005,6 @@ export default function SubjectPage() {
   );
 }
 
-const TYPE_COLORS: Record<string, string> = {
-  theory: "#3B82F6",
-  review: "#22C55E",
-  practical: "#F97316",
-};
-
 function VideoCard({
   video,
   isActive,
@@ -1030,7 +1043,7 @@ function VideoCard({
     }
   };
 
-  const typeColor = TYPE_COLORS[video.type] || color;
+  const typeColor = video.color || ({ theory: "#3B82F6", review: "#22C55E", practical: "#F97316" }[video.type] || color);
 
   if (isActive && canPlay) {
     return (
