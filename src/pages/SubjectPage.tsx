@@ -1062,7 +1062,6 @@ function VideoCard({
 }) {
   const youtubeId = video.sourceType === "youtube" ? extractYouTubeId(video.url) : null;
   const isTelegram = video.sourceType === "telegram";
-  const isDirectVideo = /\.(mp4|webm|ogg|mov|avi|mkv)(\?|$)/i.test(video.url);
   
   const canPlay = isAdmin || video.isFree || hasSubjectAccess;
 
@@ -1095,24 +1094,25 @@ function VideoCard({
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
-          ) : isDirectVideo ? (
+          ) : (
             <video
               className="h-full w-full"
               src={video.url}
               controls
               autoPlay
+              muted
               playsInline
-            />
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center text-white">
-              <p className="mb-2 text-lg">{video.title}</p>
-              <Button asChild variant="secondary" size="sm">
-                <a href={video.url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-4 w-4 ml-1" />
-                  فتح الفيديو
-                </a>
-              </Button>
-            </div>
+            >
+              <div className="flex h-full flex-col items-center justify-center bg-black text-white p-4">
+                <p className="mb-2 text-lg">{video.title}</p>
+                <Button asChild variant="secondary" size="sm">
+                  <a href={video.url} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-4 w-4 ml-1" />
+                    فتح الفيديو
+                  </a>
+                </Button>
+              </div>
+            </video>
           )}
         </div>
         <CardContent className="p-3 flex justify-between items-center">
