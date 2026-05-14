@@ -38,6 +38,7 @@ import {
   Trash2,
   Lock,
   Unlock,
+  Pencil,
   User,
   Key,
   LogIn,
@@ -1201,10 +1202,11 @@ function VideoCard({
                   title="تعديل الفيديو"
                   onClick={(e) => {
                     e.stopPropagation();
+                    console.log("Edit video clicked:", video.id);
                     onEdit?.(video);
                   }}
                 >
-                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                  <Pencil className="h-4 w-4" />
                 </Button>
                 <Button
                   size="sm"
