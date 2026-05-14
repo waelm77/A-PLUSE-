@@ -262,7 +262,7 @@ export async function updateVideo(id: string, data: Partial<Omit<Video, "id" | "
     setLocalItems("videos", items);
     return;
   }
-  await updateDoc(doc(db, "videos", id), data);
+  await updateDoc(doc(db, "videos", id), clean(data as Record<string, unknown>));
 }
 
 export async function deleteVideo(id: string): Promise<void> {
