@@ -1148,7 +1148,7 @@ function VideoCard({
             <img src={video.thumbnail} alt={video.title} className="h-full w-full object-cover" />
           ) : youtubeId ? (
             <img
-              src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`}
+              src={`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`}
               alt={video.title}
               className="h-full w-full object-cover"
               onError={(e) => { e.currentTarget.style.display = "none"; }}
