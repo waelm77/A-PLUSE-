@@ -669,7 +669,7 @@ export default function SubjectPage() {
                     <Plus className="h-4 w-4" />
                     إضافة ملف
                   </Button>
-                  <DialogContent className="max-w-md" dir="rtl">
+                  <DialogContent className="max-w-md" dir="rtl" aria-describedby={undefined}>
                     <DialogHeader>
                       <DialogTitle>إضافة ملف جديد</DialogTitle>
                     </DialogHeader>
@@ -806,7 +806,7 @@ export default function SubjectPage() {
                     <Plus className="h-4 w-4" />
                     إضافة اختبار
                   </Button>
-                  <DialogContent className="max-w-md" dir="rtl">
+                  <DialogContent className="max-w-md" dir="rtl" aria-describedby={undefined}>
                     <DialogHeader>
                       <DialogTitle>إضافة رابط اختبار إلكتروني</DialogTitle>
                     </DialogHeader>
@@ -873,7 +873,7 @@ export default function SubjectPage() {
 
       {/* Shared Video Dialog for all tabs */}
       <Dialog open={videoOpen} onOpenChange={(o) => { if (!o) { setEditingVideo(null); } setVideoOpen(o); }}>
-        <DialogContent className="max-w-md" dir="rtl">
+        <DialogContent className="max-w-md" dir="rtl" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>
               {editingVideo ? "تعديل " : "إضافة "}
@@ -954,7 +954,7 @@ export default function SubjectPage() {
       <Dialog open={accessDialogOpen} onOpenChange={(open) => {
         if (!open) setAccessDialogOpen(false);
       }}>
-        <DialogContent className="max-w-sm" dir="rtl">
+        <DialogContent className="max-w-sm" dir="rtl" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <LogIn className="h-5 w-5" />
@@ -1012,7 +1012,7 @@ export default function SubjectPage() {
 
       {/* PDF Preview Dialog */}
       <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
-        <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0">
+        <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0" aria-describedby={undefined}>
           <DialogHeader className="p-4 border-b">
             <DialogTitle>{previewFile?.title}</DialogTitle>
           </DialogHeader>
@@ -1151,6 +1151,7 @@ function VideoCard({
               src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`}
               alt={video.title}
               className="h-full w-full object-cover"
+              onError={(e) => { e.currentTarget.style.display = "none"; }}
             />
           ) : (
             <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
