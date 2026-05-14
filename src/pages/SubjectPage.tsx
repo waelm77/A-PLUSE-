@@ -50,6 +50,7 @@ import {
   getFilesBySubject,
   getAssessmentsBySubject,
   createVideo,
+  updateVideo,
   createFile,
   createAssessment,
   deleteVideo,
@@ -101,6 +102,7 @@ export default function SubjectPage() {
   const [accessError, setAccessError] = useState("");
 
   const [videoOpen, setVideoOpen] = useState(false);
+  const [editingVideo, setEditingVideo] = useState<Video | null>(null);
   const [fileOpen, setFileOpen] = useState(false);
   const [assessmentOpen, setAssessmentOpen] = useState(false);
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
@@ -243,13 +245,32 @@ export default function SubjectPage() {
   const reviewVideos = videos.filter((v) => v.type === "review");
   const practicalVideos = videos.filter((v) => v.type === "practical");
 
+  const openVideoDialog = (video?: Video, presetType?: "theory" | "review" | "practical") => {
+    if (video) {
+      setEditingVideo(video);
+      setVideoForm({
+        title: video.title,
+        type: video.type,
+        sourceType: video.sourceType,
+        url: video.url,
+        thumbnail: video.thumbnail || "",
+        duration: video.duration || "",
+        isFree: video.isFree ?? true,
+        color: video.color || "#3B82F6",
+      });
+    } else {
+      setEditingVideo(null);
+      setVideoForm({ title: "", type: presetType || "theory", sourceType: "youtube", url: "", thumbnail: "", duration: "", isFree: true, color: "#3B82F6" });
+    }
+    setVideoOpen(true);
+  };
+
   const handleVideoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id || !videoForm.title.trim() || !videoForm.url.trim()) return;
     setSubmitting(true);
     try {
-      await createVideo({
-        subjectId: id,
+      const data = {
         title: videoForm.title,
         type: videoForm.type,
         sourceType: videoForm.sourceType,
@@ -258,14 +279,21 @@ export default function SubjectPage() {
         duration: videoForm.duration || undefined,
         isFree: videoForm.isFree,
         color: videoForm.color || "#3B82F6",
-      });
-      toast.success("تم إضافة الفيديو بنجاح");
+      };
+      if (editingVideo) {
+        await updateVideo(editingVideo.id, data);
+        toast.success("تم تعديل الفيديو بنجاح");
+      } else {
+        await createVideo({ subjectId: id, ...data });
+        toast.success("تم إضافة الفيديو بنجاح");
+      }
       setVideoOpen(false);
+      setEditingVideo(null);
       setVideoForm({ title: "", type: "theory", sourceType: "youtube", url: "", thumbnail: "", duration: "", isFree: true, color: "#3B82F6" });
       await loadData();
     } catch (e) {
-      console.error("Add video error:", e);
-      toast.error("حدث خطأ أثناء إضافة الفيديو");
+      console.error("Video submit error:", e);
+      toast.error(editingVideo ? "حدث خطأ أثناء التعديل" : "حدث خطأ أثناء الإضافة");
     } finally {
       setSubmitting(false);
     }
@@ -556,20 +584,16 @@ export default function SubjectPage() {
                 <Button
                   size="sm"
                   className="gap-1"
-                  onClick={() => {
-                    setVideoForm({ ...videoForm, type: "theory" });
-                    setVideoOpen(true);
-                  }}
+                  onClick={() => openVideoDialog(undefined, "practical")}
                 >
                   <Plus className="h-4 w-4" />
                   إضافة فيديو
                 </Button>
               )}
             </div>
-
-            {theoryVideos.length > 0 ? (
+            {practicalVideos.length > 0 ? (
               <div className="grid gap-4 grid-cols-1">
-                {theoryVideos.map((video) => (
+                {practicalVideos.map((video) => (
                   <VideoCard
                     key={video.id}
                     video={video}
@@ -583,6 +607,7 @@ export default function SubjectPage() {
                     hasSubjectAccess={hasSubjectAccess}
                     onToggleFree={handleToggleFree}
                     onOpenAccess={openAccessDialog}
+                    onEdit={openVideoDialog}
                   />
                 ))}
               </div>
@@ -599,19 +624,16 @@ export default function SubjectPage() {
                 <Button
                   size="sm"
                   className="gap-1"
-                  onClick={() => {
-                    setVideoForm({ ...videoForm, type: "review" });
-                    setVideoOpen(true);
-                  }}
+                  onClick={() => openVideoDialog(undefined, "theory")}
                 >
                   <Plus className="h-4 w-4" />
                   إضافة فيديو
                 </Button>
               )}
             </div>
-            {reviewVideos.length > 0 ? (
+            {theoryVideos.length > 0 ? (
               <div className="grid gap-4 grid-cols-1">
-                {reviewVideos.map((video) => (
+                {theoryVideos.map((video) => (
                   <VideoCard
                     key={video.id}
                     video={video}
@@ -625,6 +647,7 @@ export default function SubjectPage() {
                     hasSubjectAccess={hasSubjectAccess}
                     onToggleFree={handleToggleFree}
                     onOpenAccess={openAccessDialog}
+                    onEdit={openVideoDialog}
                   />
                 ))}
               </div>
@@ -737,19 +760,16 @@ export default function SubjectPage() {
                 <Button
                   size="sm"
                   className="gap-1"
-                  onClick={() => {
-                    setVideoForm({ ...videoForm, type: "practical" });
-                    setVideoOpen(true);
-                  }}
+                  onClick={() => openVideoDialog(undefined, "review")}
                 >
                   <Plus className="h-4 w-4" />
                   إضافة فيديو
                 </Button>
               )}
             </div>
-            {practicalVideos.length > 0 ? (
+            {reviewVideos.length > 0 ? (
               <div className="grid gap-4 grid-cols-1">
-                {practicalVideos.map((video) => (
+                {reviewVideos.map((video) => (
                   <VideoCard
                     key={video.id}
                     video={video}
@@ -763,6 +783,7 @@ export default function SubjectPage() {
                     hasSubjectAccess={hasSubjectAccess}
                     onToggleFree={handleToggleFree}
                     onOpenAccess={openAccessDialog}
+                    onEdit={openVideoDialog}
                   />
                 ))}
               </div>
@@ -847,11 +868,12 @@ export default function SubjectPage() {
       </div>
 
       {/* Shared Video Dialog for all tabs */}
-      <Dialog open={videoOpen} onOpenChange={setVideoOpen}>
+      <Dialog open={videoOpen} onOpenChange={(o) => { if (!o) { setEditingVideo(null); } setVideoOpen(o); }}>
         <DialogContent className="max-w-md" dir="rtl">
           <DialogHeader>
             <DialogTitle>
-              {videoForm.type === "theory" ? "إضافة فيديو شرح" : videoForm.type === "review" ? "إضافة فيديو مراجعة" : "إضافة فيديو عملي"}
+              {editingVideo ? "تعديل " : "إضافة "}
+              {videoForm.type === "theory" ? "فيديو شرح" : videoForm.type === "review" ? "فيديو مراجعة" : "فيديو عملي"}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleVideoSubmit} className="space-y-4 mt-4">
@@ -918,7 +940,7 @@ export default function SubjectPage() {
               <Label htmlFor="isFree">فيديو مجاني (متاح للجميع)</Label>
             </div>
             <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? "جاري الإضافة..." : "إضافة الفيديو"}
+              {submitting ? "جاري الحفظ..." : editingVideo ? "حفظ التعديلات" : "إضافة الفيديو"}
             </Button>
           </form>
         </DialogContent>
@@ -1017,6 +1039,7 @@ function VideoCard({
   hasSubjectAccess,
   onToggleFree,
   onOpenAccess,
+  onEdit,
 }: {
   video: Video;
   isActive: boolean;
@@ -1029,6 +1052,7 @@ function VideoCard({
   hasSubjectAccess: boolean;
   onToggleFree: (videoId: string, currentIsFree: boolean) => void;
   onOpenAccess: () => void;
+  onEdit?: (video: Video) => void;
 }) {
   const youtubeId = video.sourceType === "youtube" ? extractYouTubeId(video.url) : null;
   const isTelegram = video.sourceType === "telegram";
@@ -1048,7 +1072,7 @@ function VideoCard({
   if (isActive && canPlay) {
     return (
       <Card className="overflow-hidden glass" style={{ borderColor: color + '40' }}>
-        <div style={{ height: "4px", backgroundColor: typeColor }} />
+        <div style={{ height: "6px", backgroundColor: typeColor }} />
         <div className="aspect-video bg-black overflow-hidden">
           {youtubeId ? (
             <iframe
@@ -1096,11 +1120,9 @@ function VideoCard({
       onClick={handlePlayClick}
       style={{ borderColor: color + '30' }}
     >
-      <div className="flex">
-        <div className="shrink-0" style={{ width: "4px", backgroundColor: typeColor }} />
-        <div className="flex flex-row flex-1 min-w-0">
+      <div className="flex flex-row">
         {/* Thumbnail */}
-        <div className="relative w-48 shrink-0 bg-muted">
+        <div className="relative w-48 shrink-0" style={{ backgroundColor: typeColor + "20" }}>
           {video.thumbnail ? (
             <img src={video.thumbnail} alt={video.title} className="h-full w-full object-cover" />
           ) : youtubeId ? (
@@ -1110,11 +1132,11 @@ function VideoCard({
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
+            <div className="flex h-full items-center justify-center" style={{ backgroundColor: typeColor + "30" }}>
               {video.sourceType === "youtube" ? (
-                <Youtube className="h-10 w-10 text-red-500" />
+                <Youtube className="h-10 w-10" style={{ color: typeColor }} />
               ) : (
-                <Play className="h-10 w-10 text-primary/60" />
+                <Play className="h-10 w-10" style={{ color: typeColor }} />
               )}
             </div>
           )}
@@ -1172,17 +1194,28 @@ function VideoCard({
                   >
                     {video.isFree ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-destructive hover:text-destructive p-1.5 h-auto"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(video.id);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="p-1.5 h-auto"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit?.(video);
+                  }}
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive p-1.5 h-auto"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(video.id);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
                 </>
               )}
             </div>
@@ -1198,7 +1231,6 @@ function VideoCard({
             </button>
           </div>
         </CardContent>
-      </div>
       </div>
     </Card>
   );

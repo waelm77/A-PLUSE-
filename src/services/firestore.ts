@@ -254,6 +254,17 @@ export async function createVideo(data: Omit<Video, "id" | "createdAt">): Promis
   return { id: ref.id, ...data, isFree: data.isFree ?? true, createdAt: new Date().toISOString() };
 }
 
+export async function updateVideo(id: string, data: Partial<Omit<Video, "id" | "createdAt">>): Promise<void> {
+  if (useLocalStorage) {
+    const items = getLocalItems<Video>("videos").map((v) =>
+      v.id === id ? { ...v, ...data } : v
+    );
+    setLocalItems("videos", items);
+    return;
+  }
+  await updateDoc(doc(db, "videos", id), data);
+}
+
 export async function deleteVideo(id: string): Promise<void> {
   if (useLocalStorage) {
     const items = getLocalItems<Video>("videos").filter((i) => i.id !== id);
