@@ -85,6 +85,7 @@ export default function AdminPage() {
     tickerBgColor: "#1a1a2e",
     tickerActive: false,
     tickerSpeed: 20,
+    tickerFontSize: "14px",
   });
 
   // ─── Ticker handlers ──
@@ -128,7 +129,7 @@ export default function AdminPage() {
   const [devicesDialogStudent, setDevicesDialogStudent] = useState<Student | null>(null);
 
   // ─── Ticker State ──
-  const [ticker, setTicker] = useState<Ticker>({ text: "", color: "#FFD700", bgColor: "#1a1a2e", active: false, speed: 20 });
+  const [ticker, setTicker] = useState<Ticker>({ text: "", color: "#FFD700", bgColor: "#1a1a2e", active: false, speed: 20, fontSize: "14px" });
   const [tickerLoading, setTickerLoading] = useState(true);
   const [tickerSaving, setTickerSaving] = useState(false);
 
@@ -181,10 +182,11 @@ export default function AdminPage() {
         tickerBgColor: subject.tickerBgColor || "#1a1a2e",
         tickerActive: subject.tickerActive || false,
         tickerSpeed: subject.tickerSpeed || 20,
+        tickerFontSize: subject.tickerFontSize || "14px",
       });
     } else {
       setEditingSubject(null);
-      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20 });
+      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px" });
     }
     setOpen(true);
   };
@@ -205,6 +207,7 @@ export default function AdminPage() {
         tickerBgColor: form.tickerBgColor || "#1a1a2e",
         tickerActive: form.tickerActive || false,
         tickerSpeed: form.tickerSpeed || 20,
+        tickerFontSize: form.tickerFontSize || "14px",
       };
       if (editingSubject) {
         await updateSubject(editingSubject.id, subjectData);
@@ -215,7 +218,7 @@ export default function AdminPage() {
       }
       setOpen(false);
       setEditingSubject(null);
-      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20 });
+      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px" });
       await loadData();
     } catch (e) {
       toast.error(editingSubject ? "حدث خطأ أثناء التعديل" : "حدث خطأ أثناء الإضافة");
@@ -532,6 +535,19 @@ export default function AdminPage() {
                           </div>
                         </div>
                         <div>
+                          <Label>حجم الخط</Label>
+                          <select
+                            value={form.tickerFontSize}
+                            onChange={(e) => setForm({ ...form, tickerFontSize: e.target.value })}
+                            className="mt-2 flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            dir="rtl"
+                          >
+                            {["12px","14px","16px","18px","20px","24px","28px","32px"].map((s) => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
                           <Label>سرعة الحركة ({form.tickerSpeed} ثانية)</Label>
                           <input
                             type="range"
@@ -846,6 +862,19 @@ export default function AdminPage() {
                           />
                         ))}
                       </div>
+                    </div>
+                    <div>
+                      <Label>حجم الخط</Label>
+                      <select
+                        value={ticker.fontSize || "14px"}
+                        onChange={(e) => setTicker({ ...ticker, fontSize: e.target.value })}
+                        className="mt-2 flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        dir="rtl"
+                      >
+                        {["12px","14px","16px","18px","20px","24px","28px","32px"].map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <Label>سرعة الحركة ({ticker.speed || 20} ثانية)</Label>

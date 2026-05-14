@@ -11,6 +11,7 @@ export interface Subject {
   tickerBgColor?: string;
   tickerActive?: boolean;
   tickerSpeed?: number;
+  tickerFontSize?: string;
 }
 
 export interface Video {
@@ -89,4 +90,5 @@ export interface Ticker {
   bgColor?: string;
   active: boolean;
   speed?: number;
+  fontSize?: string;
 }

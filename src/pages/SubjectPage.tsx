@@ -435,6 +435,7 @@ export default function SubjectPage() {
                 bgColor={subject.tickerBgColor || "#1a1a2e"}
                 active={true}
                 speed={subject.tickerSpeed || 20}
+                fontSize={subject.tickerFontSize || "14px"}
               />
             </div>
           )}
@@ -985,6 +986,12 @@ export default function SubjectPage() {
   );
 }
 
+const TYPE_COLORS: Record<string, string> = {
+  theory: "#3B82F6",
+  review: "#22C55E",
+  practical: "#F97316",
+};
+
 function VideoCard({
   video,
   isActive,
@@ -1023,10 +1030,13 @@ function VideoCard({
     }
   };
 
+  const typeColor = TYPE_COLORS[video.type] || color;
+
   if (isActive && canPlay) {
     return (
       <Card className="overflow-hidden glass" style={{ borderColor: color + '40' }}>
-        <div className="aspect-video bg-black rounded-t-xl overflow-hidden">
+        <div style={{ height: "4px", backgroundColor: typeColor }} />
+        <div className="aspect-video bg-black overflow-hidden">
           {youtubeId ? (
             <iframe
               className="h-full w-full"
@@ -1073,7 +1083,9 @@ function VideoCard({
       onClick={handlePlayClick}
       style={{ borderColor: color + '30' }}
     >
-      <div className="flex flex-row">
+      <div className="flex">
+        <div className="shrink-0" style={{ width: "4px", backgroundColor: typeColor }} />
+        <div className="flex flex-row flex-1 min-w-0">
         {/* Thumbnail */}
         <div className="relative w-48 shrink-0 bg-muted">
           {video.thumbnail ? (
@@ -1173,6 +1185,7 @@ function VideoCard({
             </button>
           </div>
         </CardContent>
+      </div>
       </div>
     </Card>
   );
