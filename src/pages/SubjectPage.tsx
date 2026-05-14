@@ -1096,7 +1096,7 @@ function VideoCard({
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center text-white">
-              <p className="mb-2">{video.title}</p>
+              <p className="mb-2 text-lg">{video.title}</p>
               <Button asChild variant="secondary" size="sm">
                 <a href={video.url} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="h-4 w-4 ml-1" />
@@ -1108,7 +1108,7 @@ function VideoCard({
         </div>
         <CardContent className="p-3 flex justify-between items-center">
           <div>
-            <p className="font-semibold text-sm">{video.title}</p>
+            <p className="font-semibold text-lg">{video.title}</p>
             <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
               {video.duration && <span>{video.duration}</span>}
               {isTelegram && <span>Telegram</span>}
@@ -1181,7 +1181,7 @@ function VideoCard({
         {/* Info */}
         <CardContent className="flex-1 p-4 flex flex-col justify-between min-w-0">
           <div>
-            <p className="font-semibold text-sm line-clamp-2">{video.title}</p>
+            <p className="font-semibold text-lg line-clamp-2">{video.title}</p>
             <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
               {video.type === "theory" && <span>شرح</span>}
               {video.type === "review" && <span>مراجعة</span>}
@@ -1301,7 +1301,7 @@ function FileCard({
             <FileText className="h-5 w-5" style={{ color: color }} />
           </div>
           <div className="min-w-0">
-            <p className="font-semibold truncate">{file.title}</p>
+            <p className="font-semibold text-lg truncate">{file.title}</p>
             <p className="text-xs text-muted-foreground">
               {file.fileType.toUpperCase()} {file.size && `• ${file.size}`}
             </p>
