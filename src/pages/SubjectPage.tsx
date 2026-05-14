@@ -585,46 +585,6 @@ export default function SubjectPage() {
                 <Button
                   size="sm"
                   className="gap-1"
-                  onClick={() => openVideoDialog(undefined, "practical")}
-                >
-                  <Plus className="h-4 w-4" />
-                  إضافة فيديو
-                </Button>
-              )}
-            </div>
-            {practicalVideos.length > 0 ? (
-              <div className="grid gap-4 grid-cols-1">
-                {practicalVideos.map((video) => (
-                  <VideoCard
-                    key={video.id}
-                    video={video}
-                    isActive={activeVideo === video.id}
-                    onPlay={() => setActiveVideo(video.id)}
-                    isAdmin={isAdmin}
-                    onDelete={(id) => handleDeleteItem("video", id)}
-                    isCompleted={completedItems.includes(video.id)}
-                    onToggleComplete={handleToggleProgress}
-                    color={subject.color}
-                    hasSubjectAccess={hasSubjectAccess}
-                    onToggleFree={handleToggleFree}
-                    onOpenAccess={openAccessDialog}
-                    onEdit={openVideoDialog}
-                  />
-                ))}
-              </div>
-            ) : (
-              <EmptyState icon={BookOpen} text="لا توجد فيديوهات شرح متاحة" />
-            )}
-          </TabsContent>
-
-          {/* Review Videos */}
-          <TabsContent value="review" className="mt-6">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-bold">مراجعة</h2>
-              {isAdmin && (
-                <Button
-                  size="sm"
-                  className="gap-1"
                   onClick={() => openVideoDialog(undefined, "theory")}
                 >
                   <Plus className="h-4 w-4" />
@@ -649,6 +609,48 @@ export default function SubjectPage() {
                     onToggleFree={handleToggleFree}
                     onOpenAccess={openAccessDialog}
                     onEdit={openVideoDialog}
+                    onClose={() => setActiveVideo(null)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState icon={BookOpen} text="لا توجد فيديوهات شرح متاحة" />
+            )}
+          </TabsContent>
+
+          {/* Review Videos */}
+          <TabsContent value="review" className="mt-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold">مراجعة</h2>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => openVideoDialog(undefined, "review")}
+                >
+                  <Plus className="h-4 w-4" />
+                  إضافة فيديو
+                </Button>
+              )}
+            </div>
+            {reviewVideos.length > 0 ? (
+              <div className="grid gap-4 grid-cols-1">
+                {reviewVideos.map((video) => (
+                  <VideoCard
+                    key={video.id}
+                    video={video}
+                    isActive={activeVideo === video.id}
+                    onPlay={() => setActiveVideo(video.id)}
+                    isAdmin={isAdmin}
+                    onDelete={(id) => handleDeleteItem("video", id)}
+                    isCompleted={completedItems.includes(video.id)}
+                    onToggleComplete={handleToggleProgress}
+                    color={subject.color}
+                    hasSubjectAccess={hasSubjectAccess}
+                    onToggleFree={handleToggleFree}
+                    onOpenAccess={openAccessDialog}
+                    onEdit={openVideoDialog}
+                    onClose={() => setActiveVideo(null)}
                   />
                 ))}
               </div>
@@ -753,7 +755,7 @@ export default function SubjectPage() {
             )}
           </TabsContent>
 
-          {/* Practical */}
+          {/* Practical Videos */}
           <TabsContent value="practical" className="mt-6">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xl font-bold">عملي</h2>
@@ -761,16 +763,16 @@ export default function SubjectPage() {
                 <Button
                   size="sm"
                   className="gap-1"
-                  onClick={() => openVideoDialog(undefined, "review")}
+                  onClick={() => openVideoDialog(undefined, "practical")}
                 >
                   <Plus className="h-4 w-4" />
                   إضافة فيديو
                 </Button>
               )}
             </div>
-            {reviewVideos.length > 0 ? (
+            {practicalVideos.length > 0 ? (
               <div className="grid gap-4 grid-cols-1">
-                {reviewVideos.map((video) => (
+                {practicalVideos.map((video) => (
                   <VideoCard
                     key={video.id}
                     video={video}
@@ -785,6 +787,7 @@ export default function SubjectPage() {
                     onToggleFree={handleToggleFree}
                     onOpenAccess={openAccessDialog}
                     onEdit={openVideoDialog}
+                    onClose={() => setActiveVideo(null)}
                   />
                 ))}
               </div>
@@ -1041,6 +1044,7 @@ function VideoCard({
   onToggleFree,
   onOpenAccess,
   onEdit,
+  onClose,
 }: {
   video: Video;
   isActive: boolean;
@@ -1054,6 +1058,7 @@ function VideoCard({
   onToggleFree: (videoId: string, currentIsFree: boolean) => void;
   onOpenAccess: () => void;
   onEdit?: (video: Video) => void;
+  onClose?: () => void;
 }) {
   const youtubeId = video.sourceType === "youtube" ? extractYouTubeId(video.url) : null;
   const isTelegram = video.sourceType === "telegram";
@@ -1074,7 +1079,13 @@ function VideoCard({
     return (
       <Card className="overflow-hidden glass" style={{ borderColor: color + '40' }}>
         <div style={{ height: "6px", backgroundColor: typeColor }} />
-        <div className="aspect-video bg-black overflow-hidden">
+        <div className="aspect-video bg-black overflow-hidden relative">
+          <button
+            onClick={(e) => { e.stopPropagation(); onClose?.(); }}
+            className="absolute top-2 right-2 z-10 rounded-full bg-black/60 p-1.5 text-white hover:bg-black/80 transition-colors"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
           {youtubeId ? (
             <iframe
               className="h-full w-full"
@@ -1119,7 +1130,7 @@ function VideoCard({
     <Card
       className={`group cursor-pointer overflow-hidden transition-all duration-300 hover:shadow-xl card-3d ${!canPlay ? 'opacity-80' : ''} glass`}
       onClick={handlePlayClick}
-      style={{ borderColor: color + '30', borderLeft: `3cm solid ${typeColor}` }}
+      style={{ borderColor: color + '30', borderLeft: `1.5cm solid ${typeColor}` }}
     >
       <div className="flex flex-row">
         {/* Thumbnail */}
