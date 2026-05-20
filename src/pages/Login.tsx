@@ -13,12 +13,12 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [admins, setAdmins] = useState<Admin[]>([]);
-  const [loading, setLoading] = useState(true);
+
   const { setUser } = useAuthStore();
   const navigate = useNavigate();
 
   useEffect(() => {
-    getAdmins().then(setAdmins).catch(() => {}).finally(() => setLoading(false));
+    getAdmins().then(setAdmins).catch(() => {});
   }, []);
 
   const handleLogin = (e: React.FormEvent) => {
@@ -32,16 +32,6 @@ export default function Login() {
         role: "admin",
       });
       toast.success(`مرحباً ${admin.name}!`);
-      navigate("/");
-    } else if (email === "admin@example.com" && password === "admin123" && admins.length === 0) {
-      // Bootstrap fallback when no admins exist in Firestore yet
-      setUser({
-        uid: "admin@example.com",
-        email: "admin@example.com",
-        name: "د. وائل عبد الفتاح",
-        role: "admin",
-      });
-      toast.success("مرحباً! يرجى إضافة مشرف جديد من لوحة التحكم.");
       navigate("/");
     } else {
       toast.error("البريد أو الرقم السري غير صحيح");
@@ -91,12 +81,6 @@ export default function Login() {
 
           <div className="mt-6 border-t border-border/50 pt-4">
             <p className="text-xs text-muted-foreground text-center mb-3">دخول الأدمن فقط</p>
-            {admins.length === 0 && !loading && (
-              <div className="space-y-1 text-xs text-muted-foreground">
-                <p>الأدمن الافتراضي: admin@example.com / admin123</p>
-                <p className="text-amber-500">قم بإضافة مشرف جديد بعد تسجيل الدخول</p>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>

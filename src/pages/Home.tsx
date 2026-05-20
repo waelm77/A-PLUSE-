@@ -227,7 +227,7 @@ export default function Home() {
             </a>
           </div>
         </div>
-        <p>جميع الحقوق محفوظة &copy; 2026 منصة A+ - د. وائل</p>
+        <p className="text-base">جميع الحقوق محفوظة &copy; 2026 منصة <span style={{ fontSize: "18px", color: "#FFD700" }}>A+</span> - د. وائل</p>
       </footer>
     </div>
   );
