@@ -13,7 +13,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo, Ticker } from "../types";
+import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo, Ticker, Admin } from "../types";
 
 let useLocalStorage = false;
 
@@ -529,6 +529,32 @@ export async function activateSubject(userId: string, subjectId: string, code: s
   }
   
   return true;
+}
+
+// ─── Admin Management ───────────────────────────────────────────
+
+export async function getAdmins(): Promise<Admin[]> {
+  const snapshot = await getDocs(collection(db, "admins"));
+  return snapshot.docs.map((d) => {
+    const data = d.data();
+    return { id: d.id, ...data, createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString() } as Admin;
+  });
+}
+
+export async function createAdmin(data: { name: string; email: string; password: string }): Promise<Admin> {
+  const ref = await addDoc(collection(db, "admins"), {
+    ...data,
+    createdAt: serverTimestamp(),
+  });
+  return { id: ref.id, ...data, createdAt: new Date().toISOString() };
+}
+
+export async function updateAdminPassword(id: string, password: string): Promise<void> {
+  await updateDoc(doc(db, "admins", id), { password });
+}
+
+export async function deleteAdmin(id: string): Promise<void> {
+  await deleteDoc(doc(db, "admins", id));
 }
 
 // ─── Student Management ─────────────────────────────────────────

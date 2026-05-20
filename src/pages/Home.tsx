@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus } from "lucide-react";
+import { Plus, MessageCircle, Send } from "lucide-react";
 import toast from "react-hot-toast";
 import { getSubjects, createSubject } from "@/services/firestore";
 import { AVAILABLE_ICONS, COLORS } from "@/lib/constants";
@@ -204,6 +204,29 @@ export default function Home() {
       </section>
 
       <footer className="border-t border-border/50 py-8 text-center text-sm text-muted-foreground">
+        <div className="mb-6 flex flex-col items-center gap-4">
+          <p className="text-base font-medium">للتواصل مع الدعم الفني</p>
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <a
+              href="https://wa.me/966531546251"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-xl bg-green-500/10 px-4 py-2 text-green-600 transition-colors hover:bg-green-500/20"
+            >
+              <MessageCircle className="h-5 w-5" />
+              <span className="font-medium">+966 53 154 6251</span>
+            </a>
+            <a
+              href="https://t.me/wael77m"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-xl bg-blue-500/10 px-4 py-2 text-blue-600 transition-colors hover:bg-blue-500/20"
+            >
+              <Send className="h-5 w-5" />
+              <span className="font-medium">@wael77m</span>
+            </a>
+          </div>
+        </div>
         <p>جميع الحقوق محفوظة &copy; 2026 منصة A+ - د. وائل</p>
       </footer>
     </div>

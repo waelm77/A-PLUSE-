@@ -1141,9 +1141,9 @@ function VideoCard({
       onClick={handlePlayClick}
       style={{ borderColor: color + '30', borderLeft: `1.5cm solid ${typeColor}` }}
     >
-      <div className="flex flex-row">
+      <div className="flex flex-col sm:flex-row">
         {/* Thumbnail */}
-        <div className="relative w-48 shrink-0 bg-muted">
+        <div className="relative w-full sm:w-48 shrink-0 bg-muted">
           {video.thumbnail ? (
             <img src={video.thumbnail} alt={video.title} className="h-full w-full object-cover" />
           ) : youtubeId ? (

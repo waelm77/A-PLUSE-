@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { collection, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -43,8 +45,6 @@ import {
   createSubject,
   deleteSubject,
   updateSubject,
-  getAllVideos,
-  getAllFiles,
   getStudents,
   createStudent,
   updateStudent,
@@ -52,9 +52,13 @@ import {
   removeDevice,
   getTicker,
   updateTicker,
+  getAdmins,
+  createAdmin,
+  updateAdminPassword,
+  deleteAdmin,
 } from "@/services/firestore";
 import { AVAILABLE_ICONS, COLORS } from "@/lib/constants";
-import type { Subject, Student, Ticker } from "@/types";
+import type { Subject, Student, Ticker, Admin } from "@/types";
 
 export default function AdminPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
@@ -128,27 +132,61 @@ export default function AdminPage() {
   const [studentSubmitting, setStudentSubmitting] = useState(false);
   const [devicesDialogStudent, setDevicesDialogStudent] = useState<Student | null>(null);
 
+  // ─── Admins State ──
+  const [admins, setAdmins] = useState<Admin[]>([]);
+  const [adminsLoading, setAdminsLoading] = useState(true);
+  const [adminDialogOpen, setAdminDialogOpen] = useState(false);
+  const [editingAdmin, setEditingAdmin] = useState<Admin | null>(null);
+  const [adminForm, setAdminForm] = useState({ name: "", email: "", password: "" });
+  const [adminSubmitting, setAdminSubmitting] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [passwordAdminId, setPasswordAdminId] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+
   // ─── Ticker State ──
   const [ticker, setTicker] = useState<Ticker>({ text: "", color: "#FFD700", bgColor: "#1a1a2e", active: false, speed: 20, fontSize: "14px" });
   const [tickerLoading, setTickerLoading] = useState(true);
   const [tickerSaving, setTickerSaving] = useState(false);
 
   useEffect(() => {
-    loadData();
+    loadSubjects();
     loadStudents();
+    loadAdmins();
     loadTicker();
   }, []);
 
-  const loadData = async () => {
+  const loadAdmins = async () => {
     try {
-      const [subjectsData, videosData, filesData] = await Promise.all([
-        getSubjects(),
-        getAllVideos(),
-        getAllFiles(),
-      ]);
+      const data = await getAdmins();
+      setAdmins(data);
+    } catch (e) {
+      toast.error("حدث خطأ في تحميل المشرفين");
+    } finally {
+      setAdminsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const unsubVideos = onSnapshot(
+      collection(db, "videos"),
+      (snapshot) => setTotalVideos(snapshot.size),
+      (err) => console.error("videos snapshot error:", err)
+    );
+    const unsubFiles = onSnapshot(
+      collection(db, "files"),
+      (snapshot) => setTotalFiles(snapshot.size),
+      (err) => console.error("files snapshot error:", err)
+    );
+    return () => {
+      unsubVideos();
+      unsubFiles();
+    };
+  }, []);
+
+  const loadSubjects = async () => {
+    try {
+      const subjectsData = await getSubjects();
       setSubjects(subjectsData);
-      setTotalVideos(videosData.length);
-      setTotalFiles(filesData.length);
     } catch (e) {
       toast.error("حدث خطأ في تحميل البيانات");
     } finally {
@@ -160,6 +198,7 @@ export default function AdminPage() {
     try {
       const data = await getStudents();
       setStudents(data);
+      return data;
     } catch (e) {
       toast.error("حدث خطأ في تحميل الطلاب");
     } finally {
@@ -219,7 +258,7 @@ export default function AdminPage() {
       setOpen(false);
       setEditingSubject(null);
       setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px" });
-      await loadData();
+      await loadSubjects();
     } catch (e) {
       toast.error(editingSubject ? "حدث خطأ أثناء التعديل" : "حدث خطأ أثناء الإضافة");
     } finally {
@@ -232,7 +271,7 @@ export default function AdminPage() {
     try {
       await deleteSubject(id);
       toast.success("تم حذف المادة بنجاح");
-      await loadData();
+      await loadSubjects();
     } catch (e) {
       toast.error("حدث خطأ أثناء الحذف");
     }
@@ -310,9 +349,8 @@ export default function AdminPage() {
     try {
       await removeDevice(studentId, deviceId);
       toast.success("تم حذف الجهاز بنجاح");
-      await loadStudents();
-      const updated = await getStudents();
-      const found = updated.find((s) => s.id === studentId);
+      const updated = await loadStudents();
+      const found = updated?.find((s) => s.id === studentId);
       if (found) setDevicesDialogStudent(found);
     } catch (e) {
       toast.error("حدث خطأ أثناء حذف الجهاز");
@@ -329,6 +367,74 @@ export default function AdminPage() {
           : [...prev.enrolledSubjects, subjectId],
       };
     });
+  };
+
+  // ─── Admin handlers ──
+  const openAdminDialog = (admin?: Admin) => {
+    setEditingAdmin(admin || null);
+    setAdminForm(admin ? { name: admin.name, email: admin.email, password: "" } : { name: "", email: "", password: "" });
+    setAdminDialogOpen(true);
+  };
+
+  const handleAdminSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminForm.name.trim() || !adminForm.email.trim()) return;
+    if (!editingAdmin && !adminForm.password.trim()) {
+      toast.error("يرجى إدخال كلمة السر");
+      return;
+    }
+    setAdminSubmitting(true);
+    try {
+      if (editingAdmin) {
+        const updates: any = { name: adminForm.name, email: adminForm.email };
+        if (adminForm.password.trim()) {
+          updates.password = adminForm.password;
+        }
+        await updateAdminPassword(editingAdmin.id, updates.password || editingAdmin.password);
+        toast.success("تم تعديل المشرف بنجاح");
+      } else {
+        await createAdmin(adminForm);
+        toast.success("تم إضافة المشرف بنجاح");
+      }
+      setAdminDialogOpen(false);
+      await loadAdmins();
+    } catch (e) {
+      toast.error("حدث خطأ أثناء حفظ المشرف");
+    } finally {
+      setAdminSubmitting(false);
+    }
+  };
+
+  const handleDeleteAdmin = async (id: string) => {
+    if (!confirm("هل أنت متأكد من حذف هذا المشرف؟")) return;
+    try {
+      await deleteAdmin(id);
+      toast.success("تم حذف المشرف بنجاح");
+      await loadAdmins();
+    } catch (e) {
+      toast.error("حدث خطأ أثناء الحذف");
+    }
+  };
+
+  const openPasswordDialog = (adminId: string) => {
+    setPasswordAdminId(adminId);
+    setNewPassword("");
+    setPasswordDialogOpen(true);
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword.trim()) {
+      toast.error("يرجى إدخال كلمة السر الجديدة");
+      return;
+    }
+    try {
+      await updateAdminPassword(passwordAdminId!, newPassword);
+      toast.success("تم تغيير كلمة السر بنجاح");
+      setPasswordDialogOpen(false);
+    } catch (e) {
+      toast.error("حدث خطأ أثناء تغيير كلمة السر");
+    }
   };
 
   if (authLoading) {
@@ -372,6 +478,10 @@ export default function AdminPage() {
             <TabsTrigger value="students" className="gap-2">
               <Users className="h-4 w-4" />
               إدارة الطلاب
+            </TabsTrigger>
+            <TabsTrigger value="admins" className="gap-2">
+              <User className="h-4 w-4" />
+              المشرفين
             </TabsTrigger>
             <TabsTrigger value="ticker" className="gap-2">
               <ScrollText className="h-4 w-4" />
@@ -809,6 +919,87 @@ export default function AdminPage() {
             </Card>
           </TabsContent>
 
+          {/* ════════ Admins Tab ════════ */}
+          <TabsContent value="admins">
+            <Card className="glass border-none">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-xl font-bold">قائمة المشرفين</CardTitle>
+                <Button size="sm" className="gap-1" onClick={() => openAdminDialog()}>
+                  <Plus className="h-4 w-4" />
+                  إضافة مشرف
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {adminsLoading ? (
+                  <div className="space-y-2">
+                    {[...Array(2)].map((_, i) => (
+                      <div key={i} className="h-12 animate-pulse rounded bg-muted" />
+                    ))}
+                  </div>
+                ) : admins.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>الاسم</TableHead>
+                          <TableHead>البريد</TableHead>
+                          <TableHead>الإجراءات</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {admins.map((admin) => (
+                          <TableRow key={admin.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-muted-foreground" />
+                                <span className="font-medium">{admin.name}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <code className="rounded bg-muted px-2 py-1 text-xs font-mono">{admin.email}</code>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1"
+                                  onClick={() => openPasswordDialog(admin.id)}
+                                >
+                                  تغيير كلمة السر
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1"
+                                  onClick={() => openAdminDialog(admin)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  className="p-2 h-auto"
+                                  onClick={() => handleDeleteAdmin(admin.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    لا يوجد مشرفين. اضغط على "إضافة مشرف" لإضافة مشرف جديد.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* ════════ Ticker Tab ════════ */}
           <TabsContent value="ticker">
             <Card className="glass border-none">
@@ -1053,6 +1244,72 @@ export default function AdminPage() {
               </p>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Dialog */}
+      <Dialog open={adminDialogOpen} onOpenChange={setAdminDialogOpen}>
+        <DialogContent className="max-w-md" dir="rtl" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>{editingAdmin ? "تعديل مشرف" : "إضافة مشرف جديد"}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAdminSubmit} className="space-y-4 mt-4">
+            <div>
+              <Label>الاسم</Label>
+              <Input
+                value={adminForm.name}
+                onChange={(e) => setAdminForm({ ...adminForm, name: e.target.value })}
+                placeholder="اسم المشرف"
+                required
+              />
+            </div>
+            <div>
+              <Label>البريد الإلكتروني</Label>
+              <Input
+                type="email"
+                value={adminForm.email}
+                onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })}
+                placeholder="admin@example.com"
+                required
+              />
+            </div>
+            <div>
+              <Label>{editingAdmin ? "كلمة السر الجديدة (اتركها فارغة إذا لم ترد التغيير)" : "كلمة السر"}</Label>
+              <Input
+                type="password"
+                value={adminForm.password}
+                onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
+                placeholder={editingAdmin ? "اتركها فارغة" : "••••••"}
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={adminSubmitting}>
+              {adminSubmitting ? "جاري الحفظ..." : editingAdmin ? "حفظ التعديلات" : "إضافة المشرف"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Password Dialog */}
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent className="max-w-sm" dir="rtl" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>تغيير كلمة السر</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handlePasswordChange} className="space-y-4 mt-4">
+            <div>
+              <Label>كلمة السر الجديدة</Label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="أدخل كلمة السر الجديدة"
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full">
+              تغيير كلمة السر
+            </Button>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

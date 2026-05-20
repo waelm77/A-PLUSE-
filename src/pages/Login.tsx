@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,25 +6,42 @@ import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/store/authStore";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-
-const ADMIN_CREDENTIALS = { name: "د. وائل عبد الفتاح", email: "admin@example.com", password: "admin123" };
+import { getAdmins } from "@/services/firestore";
+import type { Admin } from "@/types";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [admins, setAdmins] = useState<Admin[]>([]);
+  const [loading, setLoading] = useState(true);
   const { setUser } = useAuthStore();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    getAdmins().then(setAdmins).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (email === ADMIN_CREDENTIALS.email && password === ADMIN_CREDENTIALS.password) {
+    const admin = admins.find((a) => a.email === email && a.password === password);
+    if (admin) {
       setUser({
-        uid: ADMIN_CREDENTIALS.email,
-        email: ADMIN_CREDENTIALS.email,
-        name: ADMIN_CREDENTIALS.name,
+        uid: admin.id,
+        email: admin.email,
+        name: admin.name,
         role: "admin",
       });
-      toast.success(`مرحباً ${ADMIN_CREDENTIALS.name}!`);
+      toast.success(`مرحباً ${admin.name}!`);
+      navigate("/");
+    } else if (email === "admin@example.com" && password === "admin123" && admins.length === 0) {
+      // Bootstrap fallback when no admins exist in Firestore yet
+      setUser({
+        uid: "admin@example.com",
+        email: "admin@example.com",
+        name: "د. وائل عبد الفتاح",
+        role: "admin",
+      });
+      toast.success("مرحباً! يرجى إضافة مشرف جديد من لوحة التحكم.");
       navigate("/");
     } else {
       toast.error("البريد أو الرقم السري غير صحيح");
@@ -74,9 +91,12 @@ export default function Login() {
 
           <div className="mt-6 border-t border-border/50 pt-4">
             <p className="text-xs text-muted-foreground text-center mb-3">دخول الأدمن فقط</p>
-            <div className="space-y-1 text-xs text-muted-foreground">
-              <p>الأدمن: admin@example.com / admin123</p>
-            </div>
+            {admins.length === 0 && !loading && (
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p>الأدمن الافتراضي: admin@example.com / admin123</p>
+                <p className="text-amber-500">قم بإضافة مشرف جديد بعد تسجيل الدخول</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -85,6 +85,14 @@ export interface StudentFormData {
   enrolledSubjects: string[];
 }
 
+export interface Admin {
+  id: string;
+  name: string;
+  email: string;
+  password: string;
+  createdAt: string;
+}
+
 export interface Ticker {
   text: string;
   color: string;
