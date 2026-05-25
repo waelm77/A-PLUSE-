@@ -6,10 +6,10 @@ service cloud.firestore {
       allow read: if true;
       allow write: if request.auth != null;
     }
-    // Students - public read, admin only write
+    // Students - public read, allow writes for device registration (students auth via username/password, not Firebase)
     match /students/{student} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if true;
     }
     // Progress tracking - public read, admin only write
     match /progress/{doc} {
