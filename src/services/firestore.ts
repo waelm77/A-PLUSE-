@@ -33,23 +33,36 @@ function generateId(): string {
 
 // Seed default subjects if none exist
 export async function seedSubjects() {
-  if (useLocalStorage) {
-    const existing = getLocalItems<Subject>("subjects");
-    if (existing.length > 0) return;
-    const defaults: Subject[] = [
-      { id: generateId(), name: "الكيمياء العامة", description: "شرح شامل لمبادئ الكيمياء لطلاب السنة التحضيرية", color: "#00BCD4", icon: "FlaskConical", code: "chem101", createdAt: new Date().toISOString() },
-      { id: generateId(), name: "الفيزياء العامة", description: "أساسيات الفيزياء الميكانيكية والكهربائية", color: "#3F51B5", icon: "Atom", code: "phys101", createdAt: new Date().toISOString() },
-      { id: generateId(), name: "الكيمياء الحيوية", description: "دراسة العمليات الكيميائية داخل الكائنات الحية", color: "#E91E63", icon: "Dna", code: "biochem101", createdAt: new Date().toISOString() },
-      { id: generateId(), name: "التشريح", description: "دراسة بنية جسم الإنسان وأنظمته المختلفة", color: "#F44336", icon: "Heart", code: "anat101", createdAt: new Date().toISOString() },
-    ];
-    setLocalItems("subjects", defaults);
-    seedContent(defaults[0].id);
-    return;
-  }
-  const existing = await getSubjects();
-  if (existing.length === 0) {
-    // Firebase path - no automatic seeding needed
-  }
+  try {
+    if (useLocalStorage) {
+      const existing = getLocalItems<Subject>("subjects");
+      if (existing.length > 0) return;
+      const defaults: Subject[] = [
+        { id: generateId(), name: "الكيمياء العامة", description: "شرح شامل لمبادئ الكيمياء لطلاب السنة التحضيرية", color: "#00BCD4", icon: "FlaskConical", code: "chem101", createdAt: new Date().toISOString() },
+        { id: generateId(), name: "الفيزياء العامة", description: "أساسيات الفيزياء الميكانيكية والكهربائية", color: "#3F51B5", icon: "Atom", code: "phys101", createdAt: new Date().toISOString() },
+        { id: generateId(), name: "الكيمياء الحيوية", description: "دراسة العمليات الكيميائية داخل الكائنات الحية", color: "#E91E63", icon: "Dna", code: "biochem101", createdAt: new Date().toISOString() },
+        { id: generateId(), name: "التشريح", description: "دراسة بنية جسم الإنسان وأنظمته المختلفة", color: "#F44336", icon: "Heart", code: "anat101", createdAt: new Date().toISOString() },
+      ];
+      setLocalItems("subjects", defaults);
+      seedContent(defaults[0].id);
+      return;
+    }
+    const existing = await getSubjects();
+    if (existing.length === 0) {
+      const defaults = [
+        { name: "الكيمياء العامة", description: "شرح شامل لمبادئ الكيمياء لطلاب السنة التحضيرية", color: "#00BCD4", icon: "FlaskConical", code: "chem101" },
+        { name: "الفيزياء العامة", description: "أساسيات الفيزياء الميكانيكية والكهربائية", color: "#3F51B5", icon: "Atom", code: "phys101" },
+        { name: "الكيمياء الحيوية", description: "دراسة العمليات الكيميائية داخل الكائنات الحية", color: "#E91E63", icon: "Dna", code: "biochem101" },
+        { name: "التشريح", description: "دراسة بنية جسم الإنسان وأنظمته المختلفة", color: "#F44336", icon: "Heart", code: "anat101" },
+      ];
+      const col = collection(db, "subjects");
+      for (const s of defaults) {
+        try {
+          await addDoc(col, { ...s, createdAt: serverTimestamp() });
+        } catch {}
+      }
+    }
+  } catch {}
 }
 
 async function seedContent(subjectId: string) {
