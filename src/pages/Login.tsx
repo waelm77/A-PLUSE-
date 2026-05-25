@@ -6,9 +6,6 @@ import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/store/authStore";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { db, auth } from "@/lib/firebase";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -26,28 +23,12 @@ export default function Login() {
       navigate("/admin");
     } catch (err: any) {
       const code = err?.code;
-      if (code === "auth/user-not-found") {
-        // Try to migrate old admin (stored only in Firestore)
-        try {
-          const q = query(collection(db, "admins"), where("email", "==", email));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            const adminData = snap.docs[0].data();
-            if (adminData.password === password) {
-              await createUserWithEmailAndPassword(auth, email, password);
-              await loginWithEmail(email, password);
-              toast.success("مرحباً! تم ترحيل حسابك بنجاح");
-              navigate("/admin");
-              setSubmitting(false);
-              return;
-            }
-          }
-        } catch {}
-        toast.error("البريد أو الرقم السري غير صحيح");
-      } else if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
+      if (code === "auth/user-not-found" || code === "auth/wrong-password" || code === "auth/invalid-credential") {
         toast.error("البريد أو الرقم السري غير صحيح");
       } else if (code === "auth/too-many-requests") {
         toast.error("تم حظر الحساب مؤقتاً. حاول لاحقاً.");
+      } else if (code === "auth/email-already-in-use") {
+        toast.error("البريد الإلكتروني مستخدم بالفعل في حساب آخر");
       } else {
         toast.error("حدث خطأ في تسجيل الدخول");
       }

@@ -1,10 +1,21 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Subjects - public read/write for seeding
     match /subjects/{subject} {
       allow read: if true;
       allow write: if true;
     }
+    // Students - read for login, write for device registration
+    match /students/{student} {
+      allow read: if true;
+      allow write: if true;
+    }
+    // Progress tracking
+    match /progress/{doc} {
+      allow read, write: if true;
+    }
+    // All other collections (videos, files, assessments, admins...)
     match /{document=**} {
       allow read: if true;
       allow write: if request.auth != null;

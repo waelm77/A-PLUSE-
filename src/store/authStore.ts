@@ -1,12 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import {
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-} from "firebase/auth";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, where } from "firebase/firestore";
 
 interface User {
   uid: string;
@@ -77,18 +73,47 @@ export const useAuthStore = create<AuthState>()(
         setLoading: (isLoading) => set({ isLoading }),
         setStudentSession: (session) => set({ studentSession: session }),
         loginWithEmail: async (email: string, password: string) => {
-          const cred = await signInWithEmailAndPassword(auth, email, password);
-          const uid = cred.user.uid;
-          const docSnap = await getDoc(doc(db, "admins", uid));
-          let name = cred.user.email;
-          if (docSnap.exists()) {
-            name = docSnap.data().name || email;
+          try {
+            const cred = await signInWithEmailAndPassword(auth, email, password);
+            const uid = cred.user.uid;
+            const docSnap = await getDoc(doc(db, "admins", uid));
+            let name = cred.user.email;
+            if (docSnap.exists()) {
+              name = docSnap.data().name || email;
+            }
+            set({
+              user: { uid, email, name, role: "admin" },
+              isAuthenticated: true,
+              isLoading: false,
+            });
+          } catch (err: any) {
+            if (err?.code === "auth/user-not-found") {
+              // Migration: check if admin exists in Firestore (old system)
+              const q = query(collection(db, "admins"), where("email", "==", email));
+              const snap = await getDocs(q);
+              if (!snap.empty) {
+                const oldDoc = snap.docs[0];
+                const adminData = oldDoc.data();
+                if (adminData.password === password) {
+                  // Create Firebase Auth account
+                  const cred = await createUserWithEmailAndPassword(auth, email, password);
+                  // Migrate admin doc to use Firebase Auth UID
+                  await setDoc(doc(db, "admins", cred.user.uid), {
+                    name: adminData.name,
+                    email: adminData.email,
+                  });
+                  await deleteDoc(oldDoc.ref);
+                  set({
+                    user: { uid: cred.user.uid, email, name: adminData.name, role: "admin" },
+                    isAuthenticated: true,
+                    isLoading: false,
+                  });
+                  return;
+                }
+              }
+            }
+            throw err;
           }
-          set({
-            user: { uid, email, name, role: "admin" },
-            isAuthenticated: true,
-            isLoading: false,
-          });
         },
         logout: async () => {
           await signOut(auth);
