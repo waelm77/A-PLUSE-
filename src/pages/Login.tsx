@@ -22,8 +22,11 @@ export default function Login() {
       toast.success("مرحباً! تم تسجيل الدخول بنجاح");
       navigate("/admin");
     } catch (err: any) {
+      const msg = err?.message;
       const code = err?.code;
-      if (code === "auth/user-not-found" || code === "auth/wrong-password" || code === "auth/invalid-credential") {
+      if (msg === "تعذر تسجيل الدخول. الرجاء استخدام 'نسيت كلمة المرور'.") {
+        toast.error(msg);
+      } else if (code === "auth/user-not-found" || code === "auth/wrong-password" || code === "auth/invalid-credential") {
         toast.error("البريد أو الرقم السري غير صحيح");
       } else if (code === "auth/too-many-requests") {
         toast.error("تم حظر الحساب مؤقتاً. حاول لاحقاً.");

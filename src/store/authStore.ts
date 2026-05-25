@@ -1,8 +1,22 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+} from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, where } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  collection,
+  getDocs,
+  query,
+  where,
+} from "firebase/firestore";
 
 interface User {
   uid: string;
@@ -33,6 +47,8 @@ interface AuthState {
 }
 
 let authInitialized = false;
+// Flag set during migration to prevent onAuthStateChanged from overwriting
+let isMigrationInProgress = false;
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -40,10 +56,15 @@ export const useAuthStore = create<AuthState>()(
       if (!authInitialized) {
         authInitialized = true;
         onAuthStateChanged(auth, async (firebaseUser) => {
+          // If migration is in progress, let loginWithEmail handle everything
+          if (isMigrationInProgress) return;
+
           if (firebaseUser) {
             try {
               const snap = await getDoc(doc(db, "admins", firebaseUser.uid));
-              const name = snap.exists() ? snap.data().name : firebaseUser.email;
+              const name = snap.exists()
+                ? snap.data().name
+                : firebaseUser.email;
               set({
                 user: {
                   uid: firebaseUser.uid,
@@ -54,12 +75,18 @@ export const useAuthStore = create<AuthState>()(
                 isAuthenticated: true,
                 isLoading: false,
               });
-            } catch {
+            } catch (e) {
+              console.error("onAuthStateChanged error", e);
               set({ isLoading: false });
             }
           } else {
             const { studentSession } = get();
-            set({ user: null, isAuthenticated: false, isLoading: false, studentSession });
+            set({
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+              studentSession,
+            });
           }
         });
       }
@@ -69,46 +96,121 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: false,
         isLoading: true,
         studentSession: null,
-        setUser: (user) => set({ user, isAuthenticated: !!user, isLoading: false }),
+        setUser: (user) =>
+          set({ user, isAuthenticated: !!user, isLoading: false }),
         setLoading: (isLoading) => set({ isLoading }),
         setStudentSession: (session) => set({ studentSession: session }),
         loginWithEmail: async (email: string, password: string) => {
           try {
-            const cred = await signInWithEmailAndPassword(auth, email, password);
+            // 1) Try direct sign-in
+            const cred = await signInWithEmailAndPassword(
+              auth,
+              email,
+              password
+            );
             const uid = cred.user.uid;
             const docSnap = await getDoc(doc(db, "admins", uid));
-            let name = cred.user.email;
-            if (docSnap.exists()) {
-              name = docSnap.data().name || email;
-            }
             set({
-              user: { uid, email, name, role: "admin" },
+              user: {
+                uid,
+                email,
+                name: docSnap.exists()
+                  ? docSnap.data().name || email
+                  : email,
+                role: "admin",
+              },
               isAuthenticated: true,
               isLoading: false,
             });
           } catch (err: any) {
-            if (err?.code === "auth/user-not-found") {
-              // Migration: check if admin exists in Firestore (old system)
-              const q = query(collection(db, "admins"), where("email", "==", email));
+            const code = err?.code;
+
+            // 2) Handle missing / wrong-password for old-system admins
+            if (
+              code === "auth/user-not-found" ||
+              code === "auth/wrong-password"
+            ) {
+              const q = query(
+                collection(db, "admins"),
+                where("email", "==", email)
+              );
               const snap = await getDocs(q);
               if (!snap.empty) {
                 const oldDoc = snap.docs[0];
                 const adminData = oldDoc.data();
+
+                // Only proceed if the old Firestore password matches
                 if (adminData.password === password) {
-                  // Create Firebase Auth account
-                  const cred = await createUserWithEmailAndPassword(auth, email, password);
-                  // Migrate admin doc to use Firebase Auth UID
-                  await setDoc(doc(db, "admins", cred.user.uid), {
-                    name: adminData.name,
-                    email: adminData.email,
-                  });
-                  await deleteDoc(oldDoc.ref);
-                  set({
-                    user: { uid: cred.user.uid, email, name: adminData.name, role: "admin" },
-                    isAuthenticated: true,
-                    isLoading: false,
-                  });
-                  return;
+                  isMigrationInProgress = true;
+
+                  try {
+                    // Try creating a Firebase Auth account (works for user-not-found)
+                    // For wrong-password this will fail with email-already-in-use
+                    const cred = await createUserWithEmailAndPassword(
+                      auth,
+                      email,
+                      password
+                    );
+                    await setDoc(doc(db, "admins", cred.user.uid), {
+                      name: adminData.name,
+                      email: adminData.email,
+                    });
+                    await deleteDoc(oldDoc.ref);
+                    set({
+                      user: {
+                        uid: cred.user.uid,
+                        email,
+                        name: adminData.name,
+                        role: "admin",
+                      },
+                      isAuthenticated: true,
+                      isLoading: false,
+                    });
+                    return;
+                  } catch (createErr: any) {
+                    if (
+                      createErr?.code === "auth/email-already-in-use"
+                    ) {
+                      // Firebase Auth account exists with a different password
+                      // We can't change the password without Admin SDK,
+                      // but we can sign in with the existing account
+                      // if the email/user-not-found case somehow got here
+                      try {
+                        const cred = await signInWithEmailAndPassword(
+                          auth,
+                          email,
+                          password
+                        );
+                        await setDoc(
+                          doc(db, "admins", cred.user.uid),
+                          { name: adminData.name, email },
+                          { merge: true }
+                        );
+                        await deleteDoc(oldDoc.ref);
+                        set({
+                          user: {
+                            uid: cred.user.uid,
+                            email,
+                            name: adminData.name,
+                            role: "admin",
+                          },
+                          isAuthenticated: true,
+                          isLoading: false,
+                        });
+                        return;
+                      } catch {
+                        // Both create and sign-in failed
+                        isMigrationInProgress = false;
+                        throw new Error(
+                          "تعذر تسجيل الدخول. الرجاء استخدام 'نسيت كلمة المرور'."
+                        );
+                      }
+                    }
+                    isMigrationInProgress = false;
+                    throw createErr;
+                  } finally {
+                    isMigrationInProgress = false;
+                  }
                 }
               }
             }
@@ -118,7 +220,12 @@ export const useAuthStore = create<AuthState>()(
         logout: async () => {
           await signOut(auth);
           const { studentSession } = get();
-          set({ user: null, isAuthenticated: false, isLoading: false, studentSession });
+          set({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+            studentSession,
+          });
         },
       };
     },
