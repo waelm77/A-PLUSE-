@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { collection, onSnapshot, doc, setDoc, getDoc, deleteDoc } from "firebase/firestore";
+import { db, auth } from "@/lib/firebase";
+import { createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -53,9 +54,6 @@ import {
   getTicker,
   updateTicker,
   getAdmins,
-  createAdmin,
-  updateAdminPassword,
-  deleteAdmin,
 } from "@/services/firestore";
 import { AVAILABLE_ICONS, COLORS } from "@/lib/constants";
 import type { Subject, Student, Ticker, Admin } from "@/types";
@@ -141,7 +139,6 @@ export default function AdminPage() {
   const [adminSubmitting, setAdminSubmitting] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [passwordAdminId, setPasswordAdminId] = useState<string | null>(null);
-  const [newPassword, setNewPassword] = useState("");
 
   // ─── Ticker State ──
   const [ticker, setTicker] = useState<Ticker>({ text: "", color: "#FFD700", bgColor: "#1a1a2e", active: false, speed: 20, fontSize: "14px" });
@@ -386,20 +383,31 @@ export default function AdminPage() {
     setAdminSubmitting(true);
     try {
       if (editingAdmin) {
-        const updates: any = { name: adminForm.name, email: adminForm.email };
-        if (adminForm.password.trim()) {
-          updates.password = adminForm.password;
+        if (adminForm.email !== editingAdmin.email) {
+          toast.error("لا يمكن تغيير البريد الإلكتروني");
+          setAdminSubmitting(false);
+          return;
         }
-        await updateAdminPassword(editingAdmin.id, updates.password || editingAdmin.password);
+        if (adminForm.password.trim()) {
+          toast.error("لتغيير كلمة السر استخدم زر 'تغيير كلمة السر'");
+          setAdminSubmitting(false);
+          return;
+        }
+        await setDoc(doc(db, "admins", editingAdmin.id), { name: adminForm.name, email: adminForm.email }, { merge: true });
         toast.success("تم تعديل المشرف بنجاح");
       } else {
-        await createAdmin(adminForm);
+        const cred = await createUserWithEmailAndPassword(auth, adminForm.email, adminForm.password);
+        await setDoc(doc(db, "admins", cred.user.uid), { name: adminForm.name, email: adminForm.email });
         toast.success("تم إضافة المشرف بنجاح");
       }
       setAdminDialogOpen(false);
       await loadAdmins();
-    } catch (e) {
-      toast.error("حدث خطأ أثناء حفظ المشرف");
+    } catch (e: any) {
+      if (e?.code === "auth/email-already-in-use") {
+        toast.error("البريد الإلكتروني مستخدم بالفعل");
+      } else {
+        toast.error("حدث خطأ أثناء حفظ المشرف");
+      }
     } finally {
       setAdminSubmitting(false);
     }
@@ -408,7 +416,7 @@ export default function AdminPage() {
   const handleDeleteAdmin = async (id: string) => {
     if (!confirm("هل أنت متأكد من حذف هذا المشرف؟")) return;
     try {
-      await deleteAdmin(id);
+      await deleteDoc(doc(db, "admins", id));
       toast.success("تم حذف المشرف بنجاح");
       await loadAdmins();
     } catch (e) {
@@ -418,22 +426,27 @@ export default function AdminPage() {
 
   const openPasswordDialog = (adminId: string) => {
     setPasswordAdminId(adminId);
-    setNewPassword("");
     setPasswordDialogOpen(true);
   };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPassword.trim()) {
-      toast.error("يرجى إدخال كلمة السر الجديدة");
+    if (!auth.currentUser) {
+      toast.error("يجب تسجيل الدخول أولاً");
       return;
     }
     try {
-      await updateAdminPassword(passwordAdminId!, newPassword);
-      toast.success("تم تغيير كلمة السر بنجاح");
+      const adminDoc = await getDoc(doc(db, "admins", passwordAdminId!));
+      if (!adminDoc.exists()) {
+        toast.error("المشرف غير موجود");
+        return;
+      }
+      const adminEmail = adminDoc.data().email;
+      await sendPasswordResetEmail(auth, adminEmail);
+      toast.success("تم إرسال رابط تغيير كلمة السر إلى البريد");
       setPasswordDialogOpen(false);
     } catch (e) {
-      toast.error("حدث خطأ أثناء تغيير كلمة السر");
+      toast.error("حدث خطأ أثناء إرسال رابط تغيير كلمة السر");
     }
   };
 
@@ -1274,13 +1287,16 @@ export default function AdminPage() {
               />
             </div>
             <div>
-              <Label>{editingAdmin ? "كلمة السر الجديدة (اتركها فارغة إذا لم ترد التغيير)" : "كلمة السر"}</Label>
-              <Input
-                type="password"
-                value={adminForm.password}
-                onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
-                placeholder={editingAdmin ? "اتركها فارغة" : "••••••"}
-              />
+              <Label>{editingAdmin ? "" : "كلمة السر"}</Label>
+              {editingAdmin ? null : (
+                <Input
+                  type="password"
+                  value={adminForm.password}
+                  onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
+                  placeholder="••••••"
+                  required
+                />
+              )}
             </div>
             <Button type="submit" className="w-full" disabled={adminSubmitting}>
               {adminSubmitting ? "جاري الحفظ..." : editingAdmin ? "حفظ التعديلات" : "إضافة المشرف"}
@@ -1297,17 +1313,13 @@ export default function AdminPage() {
           </DialogHeader>
           <form onSubmit={handlePasswordChange} className="space-y-4 mt-4">
             <div>
-              <Label>كلمة السر الجديدة</Label>
-              <Input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="أدخل كلمة السر الجديدة"
-                required
-              />
+              <Label>تأكيد تغيير كلمة السر</Label>
+              <p className="text-sm text-muted-foreground mt-2">
+                سيتم إرسال رابط تغيير كلمة السر إلى البريد الإلكتروني الخاص بالمشرف
+              </p>
             </div>
             <Button type="submit" className="w-full">
-              تغيير كلمة السر
+              إرسال رابط التغيير
             </Button>
           </form>
         </DialogContent>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,35 +6,32 @@ import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/store/authStore";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { getAdmins } from "@/services/firestore";
-import type { Admin } from "@/types";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [admins, setAdmins] = useState<Admin[]>([]);
-
-  const { setUser } = useAuthStore();
+  const [submitting, setSubmitting] = useState(false);
+  const { loginWithEmail } = useAuthStore();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    getAdmins().then(setAdmins).catch(() => {});
-  }, []);
-
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const admin = admins.find((a) => a.email === email && a.password === password);
-    if (admin) {
-      setUser({
-        uid: admin.id,
-        email: admin.email,
-        name: admin.name,
-        role: "admin",
-      });
-      toast.success(`مرحباً ${admin.name}!`);
-      navigate("/");
-    } else {
-      toast.error("البريد أو الرقم السري غير صحيح");
+    setSubmitting(true);
+    try {
+      await loginWithEmail(email, password);
+      toast.success("مرحباً! تم تسجيل الدخول بنجاح");
+      navigate("/admin");
+    } catch (err: any) {
+      const code = err?.code;
+      if (code === "auth/user-not-found" || code === "auth/wrong-password" || code === "auth/invalid-credential") {
+        toast.error("البريد أو الرقم السري غير صحيح");
+      } else if (code === "auth/too-many-requests") {
+        toast.error("تم حظر الحساب مؤقتاً. حاول لاحقاً.");
+      } else {
+        toast.error("حدث خطأ في تسجيل الدخول");
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -47,7 +44,7 @@ export default function Login() {
             <span className="text-gradient">تسجيل الدخول</span>
           </CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
-            أدخل بياناتك للوصول إلى المنصة
+            أدخل بياناتك للوصول إلى لوحة التحكم
           </p>
         </CardHeader>
         <CardContent>
@@ -59,7 +56,7 @@ export default function Login() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="student1@example.com"
+                placeholder="admin@example.com"
                 required
               />
             </div>
@@ -74,8 +71,8 @@ export default function Login() {
                 required
               />
             </div>
-            <Button type="submit" className="w-full">
-              تسجيل الدخول
+            <Button type="submit" className="w-full" disabled={submitting}>
+              {submitting ? "جاري تسجيل الدخول..." : "تسجيل الدخول"}
             </Button>
           </form>
 

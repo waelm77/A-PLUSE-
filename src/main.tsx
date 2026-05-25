@@ -7,6 +7,9 @@ import App from './App.tsx'
 // Import Firebase (this initializes the connection)
 import '@/lib/firebase'
 
+// Initialize auth listener (side effect import)
+import '@/store/authStore'
+
 // Seed data synchronously before first render so subjects appear immediately
 import { seedSubjects } from '@/services/firestore'
 seedSubjects()
