@@ -51,6 +51,7 @@ export default function TickerBar({ text, color, bgColor, active, speed, fontSiz
 
     rafId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(rafId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker?.text, ticker?.speed, ticker?.active]);
 
   if (!ticker || !ticker.active || !ticker.text.trim()) return null;

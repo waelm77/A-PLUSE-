@@ -138,10 +138,6 @@ export default function SubjectPage() {
     isFree: true,
   });
 
-  useEffect(() => {
-    if (id) loadData();
-  }, [id]);
-
   const loadData = async () => {
     if (!id) return;
     setLoading(true);
@@ -169,6 +165,13 @@ export default function SubjectPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (id) loadData();
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   const openAccessDialog = () => {
     setAccessUsername("");
@@ -342,7 +345,7 @@ export default function SubjectPage() {
       setAssessmentOpen(false);
       setAssessmentForm({ title: "", url: "", isFree: true });
       await loadData();
-    } catch (e) {
+    } catch {
       toast.error("حدث خطأ أثناء إضافة الاختبار");
     } finally {
       setSubmitting(false);
@@ -357,7 +360,7 @@ export default function SubjectPage() {
       if (type === "assessment") await deleteAssessment(itemId);
       toast.success("تم الحذف بنجاح");
       await loadData();
-    } catch (e) {
+    } catch {
       toast.error("حدث خطأ أثناء الحذف");
     }
   };
@@ -367,7 +370,7 @@ export default function SubjectPage() {
       await toggleVideoFreeStatus(videoId, !currentIsFree);
       toast.success(!currentIsFree ? "تم جعل الفيديو مجاني" : "تم جعل الفيديو للمشتركين فقط");
       await loadData();
-    } catch (e) {
+    } catch {
       toast.error("حدث خطأ أثناء تغيير الحالة");
     }
   };
@@ -377,7 +380,7 @@ export default function SubjectPage() {
       await toggleFileFreeStatus(fileId, !currentIsFree);
       toast.success(!currentIsFree ? "تم جعل الملف مجاني" : "تم جعل الملف للمشتركين فقط");
       await loadData();
-    } catch (e) {
+    } catch {
       toast.error("حدث خطأ أثناء تغيير الحالة");
     }
   };
@@ -387,7 +390,7 @@ export default function SubjectPage() {
       await toggleFileDownloadStatus(fileId, !current);
       toast.success(!current ? "تم تفعيل التحميل" : "تم تعطيل التحميل");
       await loadData();
-    } catch (e) {
+    } catch {
       toast.error("حدث خطأ أثناء تغيير الحالة");
     }
   };
@@ -397,7 +400,7 @@ export default function SubjectPage() {
       await toggleFileViewStatus(fileId, !current);
       toast.success(!current ? "تم تفعيل المشاهدة" : "تم تعطيل المشاهدة");
       await loadData();
-    } catch (e) {
+    } catch {
       toast.error("حدث خطأ أثناء تغيير الحالة");
     }
   };
@@ -407,7 +410,7 @@ export default function SubjectPage() {
       await toggleAssessmentFreeStatus(assessmentId, !currentIsFree);
       toast.success(!currentIsFree ? "تم جعل الاختبار مجاني" : "تم جعل الاختبار للمشتركين فقط");
       await loadData();
-    } catch (e) {
+    } catch {
       toast.error("حدث خطأ أثناء تغيير الحالة");
     }
   };
@@ -536,7 +539,7 @@ export default function SubjectPage() {
                   style={{
                     borderColor: subject.color + "40",
                     "--active-bg": subject.color,
-                  } as any}
+                  } as React.CSSProperties & Record<string, string>}
                 >
                   <BookOpen className="ml-2 h-4 w-4" />
                   شرح
@@ -544,7 +547,7 @@ export default function SubjectPage() {
                 <TabsTrigger
                   value="review"
                   className="data-[state=active]:bg-primary data-[state=active]:text-white px-6 py-2.5 rounded-full border transition-all"
-                  style={{ borderColor: subject.color + "40" } as any}
+                  style={{ borderColor: subject.color + "40" }}
                 >
                   <Clock className="ml-2 h-4 w-4" />
                   مراجعة
@@ -552,7 +555,7 @@ export default function SubjectPage() {
                 <TabsTrigger
                   value="practical"
                   className="data-[state=active]:bg-primary data-[state=active]:text-white px-6 py-2.5 rounded-full border transition-all"
-                  style={{ borderColor: subject.color + "40" } as any}
+                  style={{ borderColor: subject.color + "40" }}
                 >
                   <FlaskConical className="ml-2 h-4 w-4" />
                   عملي
@@ -560,7 +563,7 @@ export default function SubjectPage() {
                 <TabsTrigger
                   value="files"
                   className="data-[state=active]:bg-primary data-[state=active]:text-white px-6 py-2.5 rounded-full border transition-all"
-                  style={{ borderColor: subject.color + "40" } as any}
+                  style={{ borderColor: subject.color + "40" }}
                 >
                   <FileText className="ml-2 h-4 w-4" />
                   ملفات
@@ -568,7 +571,7 @@ export default function SubjectPage() {
                 <TabsTrigger
                   value="tests"
                   className="data-[state=active]:bg-primary data-[state=active]:text-white px-6 py-2.5 rounded-full border transition-all"
-                  style={{ borderColor: subject.color + "40" } as any}
+                  style={{ borderColor: subject.color + "40" }}
                 >
                   <LayoutDashboard className="ml-2 h-4 w-4" />
                   اختبارات تدريبية

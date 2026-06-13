@@ -15,7 +15,7 @@ import {
 import { db } from "../lib/firebase";
 import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo, Ticker, Admin } from "../types";
 
-let useLocalStorage = false;
+const useLocalStorage = false;
 
 // LocalStorage helpers
 function getLocalItems<T>(key: string): T[] {
@@ -59,10 +59,14 @@ export async function seedSubjects() {
       for (const s of defaults) {
         try {
           await addDoc(col, { ...s, createdAt: serverTimestamp() });
-        } catch {}
+        } catch {
+          // ignore
+        }
       }
     }
-  } catch {}
+  } catch {
+    // ignore
+  }
 }
 
 async function seedContent(subjectId: string) {

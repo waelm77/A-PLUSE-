@@ -12,5 +12,17 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     cssMinify: false,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('firebase')) return 'firebase';
+            if (id.includes('radix-ui')) return 'radix';
+            if (id.includes('react')) return 'react';
+          }
+        },
+      },
+    },
+    chunkSizeWarningLimit: 800,
   },
 })

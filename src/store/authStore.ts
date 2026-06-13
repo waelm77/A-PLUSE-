@@ -122,8 +122,8 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               isLoading: false,
             });
-          } catch (err: any) {
-            const code = err?.code;
+          } catch (err: unknown) {
+            const code = (err as { code?: string })?.code;
 
             // 2) Handle missing / wrong-password for old-system admins
             if (
@@ -167,9 +167,10 @@ export const useAuthStore = create<AuthState>()(
                       isLoading: false,
                     });
                     return;
-                  } catch (createErr: any) {
+                  } catch (createErr: unknown) {
+                    const createError = createErr as { code?: string };
                     if (
-                      createErr?.code === "auth/email-already-in-use"
+                      createError?.code === "auth/email-already-in-use"
                     ) {
                       // Firebase Auth account exists with a different password
                       // We can't change the password without Admin SDK,

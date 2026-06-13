@@ -21,9 +21,10 @@ export default function Login() {
       await loginWithEmail(email, password);
       toast.success("مرحباً! تم تسجيل الدخول بنجاح");
       navigate("/admin");
-    } catch (err: any) {
-      const msg = err?.message;
-      const code = err?.code;
+    } catch (err: unknown) {
+      const error = err as { message?: string; code?: string };
+      const msg = error?.message;
+      const code = error?.code;
       if (msg === "تعذر تسجيل الدخول. الرجاء استخدام 'نسيت كلمة المرور'.") {
         toast.error(msg);
       } else if (code === "auth/user-not-found" || code === "auth/wrong-password" || code === "auth/invalid-credential") {

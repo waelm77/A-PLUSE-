@@ -145,23 +145,48 @@ export default function AdminPage() {
   const [tickerLoading, setTickerLoading] = useState(true);
   const [tickerSaving, setTickerSaving] = useState(false);
 
-  useEffect(() => {
-    loadSubjects();
-    loadStudents();
-    loadAdmins();
-    loadTicker();
-  }, []);
-
   const loadAdmins = async () => {
     try {
       const data = await getAdmins();
       setAdmins(data);
-    } catch (e) {
+    } catch {
       toast.error("حدث خطأ في تحميل المشرفين");
     } finally {
       setAdminsLoading(false);
     }
   };
+
+  const loadSubjects = async () => {
+    try {
+      const subjectsData = await getSubjects();
+      setSubjects(subjectsData);
+    } catch {
+      toast.error("حدث خطأ في تحميل البيانات");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadStudents = async () => {
+    try {
+      const data = await getStudents();
+      setStudents(data);
+      return data;
+    } catch {
+      toast.error("حدث خطأ في تحميل الطلاب");
+    } finally {
+      setStudentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    loadSubjects();
+    loadStudents();
+    loadAdmins();
+    loadTicker();
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
 
   useEffect(() => {
     const unsubVideos = onSnapshot(
@@ -179,29 +204,6 @@ export default function AdminPage() {
       unsubFiles();
     };
   }, []);
-
-  const loadSubjects = async () => {
-    try {
-      const subjectsData = await getSubjects();
-      setSubjects(subjectsData);
-    } catch (e) {
-      toast.error("حدث خطأ في تحميل البيانات");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadStudents = async () => {
-    try {
-      const data = await getStudents();
-      setStudents(data);
-      return data;
-    } catch (e) {
-      toast.error("حدث خطأ في تحميل الطلاب");
-    } finally {
-      setStudentsLoading(false);
-    }
-  };
 
   // ─── Subject handlers ──
   const openSubjectDialog = (subject?: Subject) => {
@@ -256,7 +258,7 @@ export default function AdminPage() {
       setEditingSubject(null);
       setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px" });
       await loadSubjects();
-    } catch (e) {
+    } catch {
       toast.error(editingSubject ? "حدث خطأ أثناء التعديل" : "حدث خطأ أثناء الإضافة");
     } finally {
       setSubmitting(false);
@@ -269,7 +271,7 @@ export default function AdminPage() {
       await deleteSubject(id);
       toast.success("تم حذف المادة بنجاح");
       await loadSubjects();
-    } catch (e) {
+    } catch {
       toast.error("حدث خطأ أثناء الحذف");
     }
   };
@@ -302,7 +304,7 @@ export default function AdminPage() {
     setStudentSubmitting(true);
     try {
       if (editingStudent) {
-        const updates: any = {
+        const updates: Record<string, string | string[]> = {
           displayName: studentForm.displayName,
           enrolledSubjects: studentForm.enrolledSubjects,
         };
@@ -336,7 +338,7 @@ export default function AdminPage() {
       await deleteStudent(id);
       toast.success("تم حذف الطالب بنجاح");
       await loadStudents();
-    } catch (e) {
+    } catch {
       toast.error("حدث خطأ أثناء الحذف");
     }
   };
@@ -349,7 +351,7 @@ export default function AdminPage() {
       const updated = await loadStudents();
       const found = updated?.find((s) => s.id === studentId);
       if (found) setDevicesDialogStudent(found);
-    } catch (e) {
+    } catch {
       toast.error("حدث خطأ أثناء حذف الجهاز");
     }
   };
@@ -402,8 +404,9 @@ export default function AdminPage() {
       }
       setAdminDialogOpen(false);
       await loadAdmins();
-    } catch (e: any) {
-      if (e?.code === "auth/email-already-in-use") {
+    } catch (e: unknown) {
+      const error = e as { code?: string };
+      if (error?.code === "auth/email-already-in-use") {
         toast.error("البريد الإلكتروني مستخدم بالفعل");
       } else {
         toast.error("حدث خطأ أثناء حفظ المشرف");
@@ -419,7 +422,7 @@ export default function AdminPage() {
       await deleteDoc(doc(db, "admins", id));
       toast.success("تم حذف المشرف بنجاح");
       await loadAdmins();
-    } catch (e) {
+    } catch {
       toast.error("حدث خطأ أثناء الحذف");
     }
   };
@@ -445,7 +448,7 @@ export default function AdminPage() {
       await sendPasswordResetEmail(auth, adminEmail);
       toast.success("تم إرسال رابط تغيير كلمة السر إلى البريد");
       setPasswordDialogOpen(false);
-    } catch (e) {
+    } catch {
       toast.error("حدث خطأ أثناء إرسال رابط تغيير كلمة السر");
     }
   };

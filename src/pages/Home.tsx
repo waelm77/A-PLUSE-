@@ -34,20 +34,22 @@ export default function Home() {
     icon: "BookOpen",
   });
 
-  useEffect(() => {
-    loadSubjects();
-  }, []);
-
   const loadSubjects = async () => {
     try {
       const data = await getSubjects();
       setSubjects(data);
-    } catch (e) {
+    } catch {
       toast.error("حدث خطأ في تحميل المواد");
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    loadSubjects();
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +67,7 @@ export default function Home() {
       setOpen(false);
       setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen" });
       await loadSubjects();
-    } catch (e) {
+    } catch {
       toast.error("حدث خطأ أثناء الإضافة");
     } finally {
       setSubmitting(false);
