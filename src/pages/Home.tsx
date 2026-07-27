@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/authStore";
 import Navbar from "@/components/Navbar";
+import TrialCountdown from "@/components/TrialCountdown";
 import TickerBar from "@/components/TickerBar";
 import SubjectCard from "@/components/SubjectCard";
 import { Button } from "@/components/ui/button";
@@ -96,6 +97,8 @@ export default function Home() {
           </p>
         </div>
       </section>
+
+      <TrialCountdown />
 
       {/* Subjects */}
       <section className="container mx-auto px-4 py-12">

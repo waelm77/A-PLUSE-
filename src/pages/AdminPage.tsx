@@ -38,8 +38,11 @@ import {
   XCircle,
   Edit,
   ScrollText,
+  Clock,
+  Calendar,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
+import { useTrialStore } from "@/store/trialStore";
 import toast from "react-hot-toast";
 import {
   getSubjects,
@@ -144,6 +147,16 @@ export default function AdminPage() {
   const [ticker, setTicker] = useState<Ticker>({ text: "", color: "#FFD700", bgColor: "#1a1a2e", active: false, speed: 20, fontSize: "14px" });
   const [tickerLoading, setTickerLoading] = useState(true);
   const [tickerSaving, setTickerSaving] = useState(false);
+
+  // ─── Trial State ──
+  const { endDate: trialEndDate, active: trialActive, setTrial } = useTrialStore();
+  const [trialFormDate, setTrialFormDate] = useState(trialEndDate);
+  const [trialFormActive, setTrialFormActive] = useState(trialActive);
+
+  const handleTrialSave = () => {
+    setTrial(trialFormDate, trialFormActive);
+    toast.success("تم حفظ إعدادات الفترة التجريبية");
+  };
 
   const loadAdmins = async () => {
     try {
@@ -502,6 +515,10 @@ export default function AdminPage() {
             <TabsTrigger value="ticker" className="gap-2">
               <ScrollText className="h-4 w-4" />
               الشريط المتحرك
+            </TabsTrigger>
+            <TabsTrigger value="trial" className="gap-2">
+              <Clock className="h-4 w-4" />
+              الفترة التجريبية
             </TabsTrigger>
           </TabsList>
 
@@ -1113,6 +1130,68 @@ export default function AdminPage() {
                     </Button>
                   </form>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ════════ Trial Tab ════════ */}
+          <TabsContent value="trial">
+            <Card className="glass border-none">
+              <CardHeader>
+                <CardTitle className="text-xl font-bold flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  إعدادات الفترة التجريبية
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="trial-active"
+                    checked={trialFormActive}
+                    onChange={(e) => setTrialFormActive(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <Label htmlFor="trial-active" className="mb-0 text-base font-medium">تفعيل عداد التنازلي</Label>
+                </div>
+
+                {trialFormActive && (
+                  <>
+                    <div>
+                      <Label className="text-base">تاريخ ووقت انتهاء الفترة التجريبية</Label>
+                      <input
+                        type="datetime-local"
+                        value={trialFormDate ? trialFormDate.slice(0, 16) : ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setTrialFormDate(val ? new Date(val).toISOString() : "");
+                        }}
+                        className="mt-2 flex w-full max-w-sm rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        dir="ltr"
+                      />
+                    </div>
+
+                    {trialFormDate && (
+                      <div className="rounded-lg border p-4 bg-muted/30">
+                        <p className="text-sm text-muted-foreground mb-2">معاينة:</p>
+                        <p className="text-lg font-bold text-primary flex items-center gap-2">
+                          <Calendar className="h-5 w-5" />
+                          {new Date(trialFormDate).toLocaleString("ar-SA", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <Button onClick={handleTrialSave} className="gap-2">
+                  حفظ الإعدادات
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
