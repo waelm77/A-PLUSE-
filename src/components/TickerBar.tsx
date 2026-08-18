@@ -26,15 +26,19 @@ export default function TickerBar({ text, color, bgColor, active, speed, fontSiz
 
   if (!ticker || !ticker.active || !ticker.text.trim()) return null;
 
-  const duration = ticker.speed || 20;
-  const animName = `ticker-scroll-${duration}`;
+  const scrollDuration = ticker.speed || 20;
+  const pauseDuration = 1;
+  const totalDuration = scrollDuration + pauseDuration;
+  const scrollPercent = ((scrollDuration / totalDuration) * 100).toFixed(1);
+  const animName = `ticker-ltr-${scrollDuration}`;
 
   return (
     <>
       <style>{`
         @keyframes ${animName} {
-          0% { transform: translateX(100%); }
-          100% { transform: translateX(-100%); }
+          0% { transform: translateX(-100%); }
+          ${scrollPercent}% { transform: translateX(100%); }
+          100% { transform: translateX(100%); }
         }
       `}</style>
       <div
@@ -51,7 +55,7 @@ export default function TickerBar({ text, color, bgColor, active, speed, fontSiz
         <div
           className="whitespace-nowrap inline-block"
           style={{
-            animation: `${animName} ${duration}s linear infinite`,
+            animation: `${animName} ${totalDuration}s linear infinite`,
             willChange: "transform",
           }}
           dir="auto"
