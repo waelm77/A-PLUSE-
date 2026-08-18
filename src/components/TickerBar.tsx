@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { getTicker } from "@/services/firestore";
 import type { Ticker as TickerType } from "@/types";
 
@@ -13,8 +13,6 @@ interface TickerBarProps {
 
 export default function TickerBar({ text, color, bgColor, active, speed, fontSize }: TickerBarProps) {
   const [globalTicker, setGlobalTicker] = useState<TickerType | null>(null);
-  const outerRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (text === undefined) {
@@ -26,71 +24,41 @@ export default function TickerBar({ text, color, bgColor, active, speed, fontSiz
     ? { text, color: color || "#FFD700", bgColor: bgColor || "#1a1a2e", active: active !== false, speed: speed || 20, fontSize: fontSize || "14px" }
     : globalTicker;
 
-  useEffect(() => {
-    const inner = innerRef.current;
-    const outer = outerRef.current;
-    if (!inner || !outer || !ticker) return;
-    if (!ticker.active || !ticker.text.trim()) return;
-
-    let rafId: number;
-    let startTime: number | null = null;
-
-    const getDistance = () => {
-      const containerW = outer.clientWidth;
-      const textW = inner.scrollWidth;
-      return { containerW, textW, totalDistance: containerW + textW };
-    };
-
-    let { containerW, textW, totalDistance } = getDistance();
-    if (textW === 0 || containerW === 0) return;
-
-    const durationMs = (ticker.speed || 20) * 1000;
-
-    const animate = (timestamp: number) => {
-      if (!startTime) startTime = timestamp;
-      const elapsed = (timestamp - startTime) % durationMs;
-      const progress = elapsed / durationMs;
-      inner.style.transform = `translate3d(${-textW + progress * totalDistance}px, 0, 0)`;
-      rafId = requestAnimationFrame(animate);
-    };
-
-    rafId = requestAnimationFrame(animate);
-
-    const recalc = () => {
-      const updated = getDistance();
-      containerW = updated.containerW;
-      textW = updated.textW;
-      totalDistance = updated.totalDistance;
-    };
-
-    const ro = new ResizeObserver(recalc);
-    ro.observe(outer);
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      ro.disconnect();
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticker?.text, ticker?.speed, ticker?.active]);
-
   if (!ticker || !ticker.active || !ticker.text.trim()) return null;
 
+  const duration = ticker.speed || 20;
+  const animName = `ticker-scroll-${duration}`;
+
   return (
-    <div
-      ref={outerRef}
-      className="overflow-hidden rounded-lg text-sm font-medium"
-      style={{
-        backgroundColor: ticker.bgColor || "#1a1a2e",
-        color: ticker.color,
-        border: `1px solid ${ticker.color}40`,
-        fontSize: ticker.fontSize || "14px",
-        padding: "0.5em 1em",
-        lineHeight: 1.6,
-      }}
-    >
-      <div ref={innerRef} className="inline-block whitespace-nowrap" dir="auto">
-        {ticker.text}
+    <>
+      <style>{`
+        @keyframes ${animName} {
+          0% { transform: translateX(100%); }
+          100% { transform: translateX(-100%); }
+        }
+      `}</style>
+      <div
+        className="overflow-hidden rounded-lg text-sm font-medium"
+        style={{
+          backgroundColor: ticker.bgColor || "#1a1a2e",
+          color: ticker.color,
+          border: `1px solid ${ticker.color}40`,
+          fontSize: ticker.fontSize || "14px",
+          padding: "0.5em 1em",
+          lineHeight: 1.6,
+        }}
+      >
+        <div
+          className="whitespace-nowrap inline-block"
+          style={{
+            animation: `${animName} ${duration}s linear infinite`,
+            willChange: "transform",
+          }}
+          dir="auto"
+        >
+          {ticker.text}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
