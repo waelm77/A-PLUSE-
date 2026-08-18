@@ -786,3 +786,15 @@ export async function getTicker(): Promise<Ticker> {
 export async function updateTicker(data: Ticker): Promise<void> {
   await setDoc(doc(db, "settings", "ticker"), data, { merge: true });
 }
+
+// ─── Trial Settings ──────────────────────────────────
+
+export async function getTrialSettings(): Promise<{ endDate: string; active: boolean }> {
+  const snap = await getDoc(doc(db, "settings", "trial"));
+  if (!snap.exists()) return { endDate: "", active: false };
+  return snap.data() as { endDate: string; active: boolean };
+}
+
+export async function updateTrialSettings(data: { endDate: string; active: boolean }): Promise<void> {
+  await setDoc(doc(db, "settings", "trial"), data, { merge: true });
+}

@@ -1,21 +1,28 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { getTrialSettings, updateTrialSettings } from "@/services/firestore";
 
 interface TrialState {
   endDate: string;
   active: boolean;
-  setTrial: (endDate: string, active: boolean) => void;
+  loaded: boolean;
+  load: () => Promise<void>;
+  setTrial: (endDate: string, active: boolean) => Promise<void>;
 }
 
-export const useTrialStore = create<TrialState>()(
-  persist(
-    (set) => ({
-      endDate: "",
-      active: false,
-      setTrial: (endDate, active) => set({ endDate, active }),
-    }),
-    {
-      name: "a-plus-trial",
+export const useTrialStore = create<TrialState>()((set) => ({
+  endDate: "",
+  active: false,
+  loaded: false,
+  load: async () => {
+    try {
+      const data = await getTrialSettings();
+      set({ endDate: data.endDate, active: data.active, loaded: true });
+    } catch {
+      set({ loaded: true });
     }
-  )
-);
+  },
+  setTrial: async (endDate, active) => {
+    await updateTrialSettings({ endDate, active });
+    set({ endDate, active });
+  },
+}));

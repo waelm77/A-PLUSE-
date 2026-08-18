@@ -15,18 +15,22 @@ function getTimeLeft(endDate: string) {
 }
 
 export default function TrialCountdown() {
-  const { endDate, active } = useTrialStore();
-  const [time, setTime] = useState(() => (active && endDate ? getTimeLeft(endDate) : null));
+  const { endDate, active, loaded, load } = useTrialStore();
+  const [time, setTime] = useState<ReturnType<typeof getTimeLeft> | null>(null);
 
   useEffect(() => {
-    if (!active || !endDate) {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!loaded || !active || !endDate) {
       setTime(null);
       return;
     }
     setTime(getTimeLeft(endDate));
     const id = setInterval(() => setTime(getTimeLeft(endDate)), 1000);
     return () => clearInterval(id);
-  }, [active, endDate]);
+  }, [active, endDate, loaded]);
 
   if (!time) return null;
 
