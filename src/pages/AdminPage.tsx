@@ -149,7 +149,7 @@ export default function AdminPage() {
   const [tickerSaving, setTickerSaving] = useState(false);
 
   // ─── Trial State ──
-  const { endDate: trialEndDate, active: trialActive, setTrial, load: loadTrial } = useTrialStore();
+  const { endDate: trialEndDate, active: trialActive, save: saveTrial, startListening } = useTrialStore();
   const [trialFormDate, setTrialFormDate] = useState(trialEndDate);
   const [trialFormActive, setTrialFormActive] = useState(trialActive);
   const [trialSaving, setTrialSaving] = useState(false);
@@ -162,7 +162,7 @@ export default function AdminPage() {
   const handleTrialSave = async () => {
     setTrialSaving(true);
     try {
-      await setTrial(trialFormDate, trialFormActive);
+      await saveTrial(trialFormDate, trialFormActive);
       toast.success("تم حفظ إعدادات الفترة التجريبية");
     } catch {
       toast.error("حدث خطأ أثناء الحفظ");
@@ -170,6 +170,11 @@ export default function AdminPage() {
       setTrialSaving(false);
     }
   };
+
+  useEffect(() => {
+    const unsub = startListening();
+    return () => unsub();
+  }, [startListening]);
 
   const loadAdmins = async () => {
     try {
@@ -211,7 +216,6 @@ export default function AdminPage() {
     loadStudents();
     loadAdmins();
     loadTicker();
-    loadTrial();
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 

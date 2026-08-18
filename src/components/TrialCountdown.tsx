@@ -15,12 +15,13 @@ function getTimeLeft(endDate: string) {
 }
 
 export default function TrialCountdown() {
-  const { endDate, active, loaded, load } = useTrialStore();
+  const { endDate, active, loaded, startListening } = useTrialStore();
   const [time, setTime] = useState<ReturnType<typeof getTimeLeft> | null>(null);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    const unsub = startListening();
+    return () => unsub();
+  }, [startListening]);
 
   useEffect(() => {
     if (!loaded || !active || !endDate) {

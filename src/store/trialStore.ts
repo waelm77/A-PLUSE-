@@ -1,28 +1,37 @@
 import { create } from "zustand";
-import { getTrialSettings, updateTrialSettings } from "@/services/firestore";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 interface TrialState {
   endDate: string;
   active: boolean;
   loaded: boolean;
-  load: () => Promise<void>;
-  setTrial: (endDate: string, active: boolean) => Promise<void>;
+  startListening: () => () => void;
+  save: (endDate: string, active: boolean) => Promise<void>;
 }
 
-export const useTrialStore = create<TrialState>()((set) => ({
+export const useTrialStore = create<TrialState>()(() => ({
   endDate: "",
   active: false,
   loaded: false,
-  load: async () => {
-    try {
-      const data = await getTrialSettings();
-      set({ endDate: data.endDate, active: data.active, loaded: true });
-    } catch {
-      set({ loaded: true });
-    }
+  startListening: () => {
+    const unsub = onSnapshot(
+      doc(db, "settings", "trial"),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          useTrialStore.setState({ endDate: data.endDate || "", active: data.active || false, loaded: true });
+        } else {
+          useTrialStore.setState({ endDate: "", active: false, loaded: true });
+        }
+      },
+      () => {
+        useTrialStore.setState({ loaded: true });
+      }
+    );
+    return unsub;
   },
-  setTrial: async (endDate, active) => {
-    await updateTrialSettings({ endDate, active });
-    set({ endDate, active });
+  save: async (endDate, active) => {
+    await setDoc(doc(db, "settings", "trial"), { endDate, active }, { merge: true });
   },
 }));
