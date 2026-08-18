@@ -32,14 +32,19 @@ export default function TickerBar({ text, color, bgColor, active, speed, fontSiz
     if (!inner || !outer || !ticker) return;
     if (!ticker.active || !ticker.text.trim()) return;
 
-    const containerW = outer.offsetWidth;
-    const textW = inner.offsetWidth;
+    let rafId: number;
+    let startTime: number | null = null;
+
+    const getDistance = () => {
+      const containerW = outer.clientWidth;
+      const textW = inner.scrollWidth;
+      return { containerW, textW, totalDistance: containerW + textW };
+    };
+
+    let { containerW, textW, totalDistance } = getDistance();
     if (textW === 0 || containerW === 0) return;
 
-    const totalDistance = containerW + textW;
     const durationMs = (ticker.speed || 20) * 1000;
-    let startTime: number | null = null;
-    let rafId: number;
 
     const animate = (timestamp: number) => {
       if (!startTime) startTime = timestamp;
@@ -50,7 +55,21 @@ export default function TickerBar({ text, color, bgColor, active, speed, fontSiz
     };
 
     rafId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(rafId);
+
+    const recalc = () => {
+      const updated = getDistance();
+      containerW = updated.containerW;
+      textW = updated.textW;
+      totalDistance = updated.totalDistance;
+    };
+
+    const ro = new ResizeObserver(recalc);
+    ro.observe(outer);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      ro.disconnect();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker?.text, ticker?.speed, ticker?.active]);
 
