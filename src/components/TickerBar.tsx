@@ -26,46 +26,21 @@ export default function TickerBar({ text, color, bgColor, active, speed, fontSiz
 
   if (!ticker || !ticker.active || !ticker.text.trim()) return null;
 
-  const scrollDuration = ticker.speed || 20;
-  const pauseSeconds = 1;
-  const totalDuration = scrollDuration + pauseSeconds;
-  const scrollPercent = ((scrollDuration / totalDuration) * 100).toFixed(1);
-  const animName = `ticker-ltr-${scrollDuration}`;
-
   return (
-    <>
-      <style>{`
-        @keyframes ${animName} {
-          0% { left: -100%; }
-          ${scrollPercent}% { left: 100%; }
-          100% { left: 100%; }
-        }
-      `}</style>
-      <div
-        className="overflow-hidden rounded-lg text-sm font-medium"
-        style={{
-          position: "relative",
-          backgroundColor: ticker.bgColor || "#1a1a2e",
-          color: ticker.color,
-          border: `1px solid ${ticker.color}40`,
-          fontSize: ticker.fontSize || "14px",
-          padding: "0.5em 1em",
-          lineHeight: 1.6,
-        }}
-      >
-        <div
-          className="whitespace-nowrap"
-          style={{
-            position: "absolute",
-            top: "50%",
-            transform: "translateY(-50%)",
-            animation: `${animName} ${totalDuration}s linear infinite`,
-          }}
-          dir="auto"
-        >
-          {ticker.text}
-        </div>
-      </div>
-    </>
+    <div
+      className="rounded-lg text-sm font-medium text-center mx-auto"
+      style={{
+        width: "fit-content",
+        backgroundColor: ticker.bgColor || "#1a1a2e",
+        color: ticker.color,
+        border: `1px solid ${ticker.color}40`,
+        fontSize: ticker.fontSize || "14px",
+        padding: "0.5em 1.5em",
+        lineHeight: 1.6,
+      }}
+      dir="auto"
+    >
+      {ticker.text}
+    </div>
   );
 }
