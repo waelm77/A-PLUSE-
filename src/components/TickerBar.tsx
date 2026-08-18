@@ -27,8 +27,8 @@ export default function TickerBar({ text, color, bgColor, active, speed, fontSiz
   if (!ticker || !ticker.active || !ticker.text.trim()) return null;
 
   const scrollDuration = ticker.speed || 20;
-  const pauseDuration = 1;
-  const totalDuration = scrollDuration + pauseDuration;
+  const pauseSeconds = 1;
+  const totalDuration = scrollDuration + pauseSeconds;
   const scrollPercent = ((scrollDuration / totalDuration) * 100).toFixed(1);
   const animName = `ticker-ltr-${scrollDuration}`;
 
@@ -36,14 +36,15 @@ export default function TickerBar({ text, color, bgColor, active, speed, fontSiz
     <>
       <style>{`
         @keyframes ${animName} {
-          0% { transform: translateX(-100%); }
-          ${scrollPercent}% { transform: translateX(100%); }
-          100% { transform: translateX(100%); }
+          0% { left: -100%; }
+          ${scrollPercent}% { left: 100%; }
+          100% { left: 100%; }
         }
       `}</style>
       <div
         className="overflow-hidden rounded-lg text-sm font-medium"
         style={{
+          position: "relative",
           backgroundColor: ticker.bgColor || "#1a1a2e",
           color: ticker.color,
           border: `1px solid ${ticker.color}40`,
@@ -53,10 +54,12 @@ export default function TickerBar({ text, color, bgColor, active, speed, fontSiz
         }}
       >
         <div
-          className="whitespace-nowrap inline-block"
+          className="whitespace-nowrap"
           style={{
+            position: "absolute",
+            top: "50%",
+            transform: "translateY(-50%)",
             animation: `${animName} ${totalDuration}s linear infinite`,
-            willChange: "transform",
           }}
           dir="auto"
         >
