@@ -45,7 +45,7 @@ export default function TickerBar({ text, color, bgColor, active, speed, fontSiz
       if (!startTime) startTime = timestamp;
       const elapsed = (timestamp - startTime) % durationMs;
       const progress = elapsed / durationMs;
-      inner.style.transform = `translate3d(${containerW - progress * totalDistance}px, 0, 0)`;
+      inner.style.transform = `translate3d(${-textW + progress * totalDistance}px, 0, 0)`;
       rafId = requestAnimationFrame(animate);
     };
 
