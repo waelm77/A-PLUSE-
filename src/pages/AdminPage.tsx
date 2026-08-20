@@ -40,6 +40,7 @@ import {
   ScrollText,
   Clock,
   Calendar,
+  Search,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useTrialStore } from "@/store/trialStore";
@@ -132,6 +133,9 @@ export default function AdminPage() {
   });
   const [studentSubmitting, setStudentSubmitting] = useState(false);
   const [devicesDialogStudent, setDevicesDialogStudent] = useState<Student | null>(null);
+
+  // ─── Student Search ──
+  const [studentSearch, setStudentSearch] = useState("");
 
   // ─── Admins State ──
   const [admins, setAdmins] = useState<Admin[]>([]);
@@ -862,10 +866,22 @@ export default function AdminPage() {
             <Card className="glass border-none">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-xl font-bold">قائمة الطلاب</CardTitle>
-                <Button size="sm" className="gap-1" onClick={openAddStudent}>
-                  <Plus className="h-4 w-4" />
-                  إضافة طالب
-                </Button>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="بحث بالاسم أو اسم المستخدم..."
+                      value={studentSearch}
+                      onChange={(e) => setStudentSearch(e.target.value)}
+                      className="pr-9 w-48 sm:w-64"
+                      dir="rtl"
+                    />
+                  </div>
+                  <Button size="sm" className="gap-1" onClick={openAddStudent}>
+                    <Plus className="h-4 w-4" />
+                    إضافة طالب
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {studentsLoading ? (
@@ -875,92 +891,234 @@ export default function AdminPage() {
                     ))}
                   </div>
                 ) : students.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>اسم المستخدم</TableHead>
-                          <TableHead>الاسم</TableHead>
-                          <TableHead className="hidden sm:table-cell">المواد</TableHead>
-                          <TableHead className="hidden sm:table-cell">الأجهزة</TableHead>
-                          <TableHead>الحالة</TableHead>
-                          <TableHead>الإجراءات</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {students.map((student) => (
-                          <TableRow key={student.id}>
-                            <TableCell>
-                              <code className="rounded bg-muted px-2 py-1 text-xs font-mono">{student.username}</code>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
+                  (() => {
+                    const filtered = students.filter((s) => {
+                      if (!studentSearch.trim()) return true;
+                      const q = studentSearch.toLowerCase();
+                      return (
+                        s.displayName.toLowerCase().includes(q) ||
+                        s.username.toLowerCase().includes(q)
+                      );
+                    });
+
+                    const grouped: Record<string, { subject: Subject; students: Student[] }> = {};
+                    for (const subject of subjects) {
+                      const subjectStudents = filtered.filter((s) =>
+                        s.enrolledSubjects.includes(subject.id)
+                      );
+                      if (subjectStudents.length > 0) {
+                        grouped[subject.id] = { subject, students: subjectStudents };
+                      }
+                    }
+
+                    const unassigned = filtered.filter((s) =>
+                      s.enrolledSubjects.length === 0
+                    );
+
+                    const totalGroups = Object.keys(grouped).length + (unassigned.length > 0 ? 1 : 0);
+
+                    if (totalGroups === 0 && studentSearch.trim()) {
+                      return (
+                        <p className="text-center text-muted-foreground py-8">
+                          لا توجد نتائج لـ "{studentSearch}"
+                        </p>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-6">
+                        {Object.values(grouped).map(({ subject, students: groupStudents }) => {
+                          const Icon = AVAILABLE_ICONS.find((i) => i.name === subject.icon)?.icon || BookOpen;
+                          return (
+                            <div key={subject.id}>
+                              <div className="flex items-center gap-3 mb-3 pb-2 border-b border-border/50">
+                                <div
+                                  className="flex h-8 w-8 items-center justify-center rounded-lg"
+                                  style={{ backgroundColor: subject.color }}
+                                >
+                                  <Icon className="h-4 w-4 text-white" />
+                                </div>
+                                <h3 className="text-lg font-bold">{subject.name}</h3>
+                                <span className="text-sm text-muted-foreground">({groupStudents.length} طالب)</span>
+                              </div>
+                              <div className="overflow-x-auto">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead>اسم المستخدم</TableHead>
+                                      <TableHead>الاسم</TableHead>
+                                      <TableHead className="hidden sm:table-cell">الأجهزة</TableHead>
+                                      <TableHead>الحالة</TableHead>
+                                      <TableHead>الإجراءات</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {groupStudents.map((student) => (
+                                      <TableRow key={student.id}>
+                                        <TableCell>
+                                          <code className="rounded bg-muted px-2 py-1 text-xs font-mono">{student.username}</code>
+                                        </TableCell>
+                                        <TableCell>
+                                          <div className="flex items-center gap-2">
+                                            <User className="h-4 w-4 text-muted-foreground" />
+                                            <span className="font-medium">{student.displayName}</span>
+                                          </div>
+                                        </TableCell>
+                                        <TableCell className="hidden sm:table-cell">
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="gap-1"
+                                            onClick={() => setDevicesDialogStudent(student)}
+                                          >
+                                            {student.devices.length === 0 ? (
+                                              <span className="text-xs text-muted-foreground">لا يوجد</span>
+                                            ) : (
+                                              <>
+                                                <Smartphone className="h-3 w-3" />
+                                                <span>{student.devices.length}/2</span>
+                                              </>
+                                            )}
+                                          </Button>
+                                        </TableCell>
+                                        <TableCell>
+                                          {student.isActive ? (
+                                            <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                                              <CheckCircle2 className="h-3 w-3" />
+                                              نشط
+                                            </span>
+                                          ) : (
+                                            <span className="flex items-center gap-1 text-xs text-red-600 font-medium">
+                                              <XCircle className="h-3 w-3" />
+                                              موقوف
+                                            </span>
+                                          )}
+                                        </TableCell>
+                                        <TableCell>
+                                          <div className="flex items-center gap-2">
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              className="p-2 h-auto"
+                                              onClick={() => openEditStudent(student)}
+                                              title="تعديل"
+                                            >
+                                              <Edit className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="destructive"
+                                              className="p-2 h-auto"
+                                              onClick={() => handleDeleteStudent(student.id)}
+                                              title="حذف"
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                          </div>
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {unassigned.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-3 mb-3 pb-2 border-b border-border/50">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
                                 <User className="h-4 w-4 text-muted-foreground" />
-                                <span className="font-medium">{student.displayName}</span>
                               </div>
-                            </TableCell>
-                            <TableCell className="hidden sm:table-cell">
-                              <span className="text-xs text-muted-foreground">
-                                {student.enrolledSubjects.length} مادة
-                              </span>
-                            </TableCell>
-                            <TableCell className="hidden sm:table-cell">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="gap-1"
-                                onClick={() => setDevicesDialogStudent(student)}
-                              >
-                                {student.devices.length === 0 ? (
-                                  <span className="text-xs text-muted-foreground">لا يوجد</span>
-                                ) : (
-                                  <>
-                                    <Smartphone className="h-3 w-3" />
-                                    <span>{student.devices.length}/2</span>
-                                  </>
-                                )}
-                              </Button>
-                            </TableCell>
-                            <TableCell>
-                              {student.isActive ? (
-                                <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
-                                  <CheckCircle2 className="h-3 w-3" />
-                                  نشط
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1 text-xs text-red-600 font-medium">
-                                  <XCircle className="h-3 w-3" />
-                                  موقوف
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="p-2 h-auto"
-                                  onClick={() => openEditStudent(student)}
-                                  title="تعديل"
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  className="p-2 h-auto"
-                                  onClick={() => handleDeleteStudent(student.id)}
-                                  title="حذف"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                              <h3 className="text-lg font-bold">غير مُعيَّنين لمادة</h3>
+                              <span className="text-sm text-muted-foreground">({unassigned.length} طالب)</span>
+                            </div>
+                            <div className="overflow-x-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>اسم المستخدم</TableHead>
+                                    <TableHead>الاسم</TableHead>
+                                    <TableHead className="hidden sm:table-cell">الأجهزة</TableHead>
+                                    <TableHead>الحالة</TableHead>
+                                    <TableHead>الإجراءات</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {unassigned.map((student) => (
+                                    <TableRow key={student.id}>
+                                      <TableCell>
+                                        <code className="rounded bg-muted px-2 py-1 text-xs font-mono">{student.username}</code>
+                                      </TableCell>
+                                      <TableCell>
+                                        <div className="flex items-center gap-2">
+                                          <User className="h-4 w-4 text-muted-foreground" />
+                                          <span className="font-medium">{student.displayName}</span>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="hidden sm:table-cell">
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="gap-1"
+                                          onClick={() => setDevicesDialogStudent(student)}
+                                        >
+                                          {student.devices.length === 0 ? (
+                                            <span className="text-xs text-muted-foreground">لا يوجد</span>
+                                          ) : (
+                                            <>
+                                              <Smartphone className="h-3 w-3" />
+                                              <span>{student.devices.length}/2</span>
+                                            </>
+                                          )}
+                                        </Button>
+                                      </TableCell>
+                                      <TableCell>
+                                        {student.isActive ? (
+                                          <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                                            <CheckCircle2 className="h-3 w-3" />
+                                            نشط
+                                          </span>
+                                        ) : (
+                                          <span className="flex items-center gap-1 text-xs text-red-600 font-medium">
+                                            <XCircle className="h-3 w-3" />
+                                            موقوف
+                                          </span>
+                                        )}
+                                      </TableCell>
+                                      <TableCell>
+                                        <div className="flex items-center gap-2">
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="p-2 h-auto"
+                                            onClick={() => openEditStudent(student)}
+                                            title="تعديل"
+                                          >
+                                            <Edit className="h-4 w-4" />
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            className="p-2 h-auto"
+                                            onClick={() => handleDeleteStudent(student.id)}
+                                            title="حذف"
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()
                 ) : (
                   <p className="text-center text-muted-foreground py-8">
                     لا يوجد طلاب. اضغط على "إضافة طالب" لإنشاء طالب جديد.
