@@ -226,6 +226,30 @@ export default function AdminPage() {
     loadAdmins();
     loadTicker();
     /* eslint-enable react-hooks/set-state-in-effect */
+
+    // Realtime listeners keep every count/list instantly in sync with the
+    // database, no matter where the mutation happened (admin page, subject
+    // page, another tab or device)
+    const unsubStudents = onSnapshot(
+      collection(db, "students"),
+      (snapshot) => {
+        setStudents(snapshot.docs.map((d) => {
+          const data = d.data();
+          return { id: d.id, ...data, createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString() } as Student;
+        }));
+        setStudentsLoading(false);
+      },
+      (err) => console.error("students snapshot error:", err)
+    );
+    const unsubSubjects = onSnapshot(
+      collection(db, "subjects"),
+      (snapshot) => setSubjects(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Subject[]),
+      (err) => console.error("subjects snapshot error:", err)
+    );
+    return () => {
+      unsubStudents();
+      unsubSubjects();
+    };
   }, []);
 
   useEffect(() => {

@@ -90,7 +90,7 @@ import type { Subject, Video, FileItem, Assessment } from "@/types";
     return null;
   };
 
-  type PlayerKind = "youtube" | "telegram" | "telegramPrivate" | "file" | "vimeo" | "external";
+  type PlayerKind = "youtube" | "telegram" | "telegramPrivate" | "file" | "vimeo" | "bunny" | "external";
 
   /**
    * Resolves any video URL into the right in-app player:
@@ -126,6 +126,13 @@ import type { Subject, Video, FileItem, Assessment } from "@/types";
 
     const vimeo = url.match(/^https?:\/\/(?:www\.|player\.)?vimeo\.com\/(?:video\/)?(\d+)/i);
     if (vimeo) return { kind: "vimeo", src: `https://player.vimeo.com/video/${vimeo[1]}?autoplay=1` };
+
+    // Bunny Stream (bunny.net) embeds — allow iframe playback with autoplay
+    if (/^https?:\/\/(?:iframe\.mediadelivery\.net|video\.bunnycdn\.com|bunny\.net)\//i.test(url)) {
+      const sep = url.includes("?") ? "&" : "?";
+      const src = /autoplay=/i.test(url) ? url : `${url}${sep}autoplay=true`;
+      return { kind: "bunny", src };
+    }
 
     return { kind: "external" };
   }
@@ -1307,6 +1314,15 @@ function VideoCard({
               allowFullScreen
             />
           )}
+          {player.kind === "bunny" && (
+            <iframe
+              className="h-full w-full"
+              src={player.src}
+              title={video.title}
+              allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+              allowFullScreen
+            />
+          )}
           {player.kind === "file" && (
             <video
               className="h-full w-full"
@@ -1372,7 +1388,7 @@ function VideoCard({
         {/* Thumbnail */}
         <div className="relative w-full sm:w-48 shrink-0 bg-muted">
           <VideoThumb video={video} />
-          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg">
               {canPlay ? (
                  <Play className="h-5 w-5 ml-0.5" style={{ color: color }} />
