@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTrialStore } from "@/store/trialStore";
 import { Clock, AlertTriangle } from "lucide-react";
+import type { Subject } from "@/types";
 
 function getTimeLeft(endDate: string) {
   const diff = new Date(endDate).getTime() - Date.now();
@@ -14,40 +15,24 @@ function getTimeLeft(endDate: string) {
   };
 }
 
-export default function TrialCountdown({ variant = "home" }: { variant?: "home" | "subject" }) {
-  const {
-    endDate,
-    active,
-    subjectActive,
-    subjectTitle,
-    subjectEndDate,
-    loaded,
-    startListening,
-  } = useTrialStore();
-  const [time, setTime] = useState<ReturnType<typeof getTimeLeft> | null>(null);
-
-  useEffect(() => {
-    const unsub = startListening();
-    return () => unsub();
-  }, [startListening]);
-
-  const isEnabled = variant === "home" ? active : subjectActive;
-  const effectiveEndDate =
-    variant === "home"
-      ? endDate
-      : subjectEndDate || endDate;
+function CountdownBox({
+  title,
+  endDate,
+  expiredTitle,
+}: {
+  title: string;
+  endDate: string;
+  expiredTitle?: string;
+}) {
+  const [time, setTime] = useState<ReturnType<typeof getTimeLeft> | null>(() => getTimeLeft(endDate));
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
-    if (!loaded || !isEnabled || !effectiveEndDate) {
-      setTime(null);
-      return;
-    }
-    setTime(getTimeLeft(effectiveEndDate));
-    const id = setInterval(() => setTime(getTimeLeft(effectiveEndDate)), 1000);
+    setTime(getTimeLeft(endDate));
+    const id = setInterval(() => setTime(getTimeLeft(endDate)), 1000);
     return () => clearInterval(id);
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [isEnabled, effectiveEndDate, loaded]);
+  }, [endDate]);
 
   if (!time) return null;
 
@@ -70,20 +55,14 @@ export default function TrialCountdown({ variant = "home" }: { variant?: "home" 
         {time.expired ? (
           <div className="flex flex-col items-center gap-3">
             <AlertTriangle className="h-10 w-10 text-red-500" />
-            <p className="text-xl font-bold text-red-500">
-              {variant === "subject"
-                ? `${subjectTitle} — انتهى الوقت`
-                : "انتهت الفترة التجريبية"}
-            </p>
+            <p className="text-xl font-bold text-red-500">{expiredTitle || `${title} — انتهى الوقت`}</p>
             <p className="text-sm text-muted-foreground">يرجى التواصل مع الإدارة للحصول على اشتراك</p>
           </div>
         ) : (
           <>
             <div className="flex items-center justify-center gap-2 mb-4">
               <Clock className="h-5 w-5 text-primary" />
-              <p className="text-lg font-bold">
-                {variant === "subject" ? subjectTitle : "الفترة التجريبية تنتهي خلال"}
-              </p>
+              <p className="text-lg font-bold">{title}</p>
             </div>
             <div className="flex items-center justify-center gap-3 sm:gap-5">
               {units.map((u) => (
@@ -101,5 +80,31 @@ export default function TrialCountdown({ variant = "home" }: { variant?: "home" 
         )}
       </div>
     </section>
+  );
+}
+
+export default function TrialCountdown() {
+  const { endDate, active, loaded, startListening } = useTrialStore();
+
+  useEffect(() => {
+    const unsub = startListening();
+    return () => unsub();
+  }, [startListening]);
+
+  if (!loaded || !active || !endDate) return null;
+
+  return (
+    <CountdownBox title="الفترة التجريبية تنتهي خلال" endDate={endDate} expiredTitle="انتهت الفترة التجريبية" />
+  );
+}
+
+export function SubjectCountdown({ subject }: { subject: Subject }) {
+  if (!subject.countdownActive || !subject.countdownEndDate) return null;
+
+  return (
+    <CountdownBox
+      title={subject.countdownTitle?.trim() || "الفترة التجريبية تنتهي خلال"}
+      endDate={subject.countdownEndDate}
+    />
   );
 }

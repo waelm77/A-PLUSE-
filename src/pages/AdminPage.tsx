@@ -92,6 +92,9 @@ export default function AdminPage() {
     tickerActive: false,
     tickerSpeed: 20,
     tickerFontSize: "14px",
+    countdownActive: false,
+    countdownTitle: "الفترة التجريبية تنتهي خلال",
+    countdownEndDate: "",
   });
 
   // ─── Ticker handlers ──
@@ -153,42 +156,22 @@ export default function AdminPage() {
   const [tickerSaving, setTickerSaving] = useState(false);
 
   // ─── Trial State ──
-  const {
-    endDate: trialEndDate,
-    active: trialActive,
-    subjectActive,
-    subjectTitle,
-    subjectEndDate,
-    save: saveTrial,
-    startListening,
-  } = useTrialStore();
+  const { endDate: trialEndDate, active: trialActive, save: saveTrial, startListening } = useTrialStore();
   const [trialFormDate, setTrialFormDate] = useState(trialEndDate);
   const [trialFormActive, setTrialFormActive] = useState(trialActive);
-  const [subjectCountdownActive, setSubjectCountdownActive] = useState(subjectActive);
-  const [subjectCountdownTitle, setSubjectCountdownTitle] = useState(subjectTitle);
-  const [subjectCountdownDate, setSubjectCountdownDate] = useState(subjectEndDate);
   const [trialSaving, setTrialSaving] = useState(false);
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
     setTrialFormDate(trialEndDate);
     setTrialFormActive(trialActive);
-    setSubjectCountdownActive(subjectActive);
-    setSubjectCountdownTitle(subjectTitle);
-    setSubjectCountdownDate(subjectEndDate);
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [trialEndDate, trialActive, subjectActive, subjectTitle, subjectEndDate]);
+  }, [trialEndDate, trialActive]);
 
   const handleTrialSave = async () => {
     setTrialSaving(true);
     try {
-      await saveTrial({
-        endDate: trialFormDate,
-        active: trialFormActive,
-        subjectActive: subjectCountdownActive,
-        subjectTitle: subjectCountdownTitle.trim() || "الفترة التجريبية تنتهي خلال",
-        subjectEndDate: subjectCountdownDate,
-      });
+      await saveTrial(trialFormDate, trialFormActive);
       toast.success("تم حفظ إعدادات الفترة التجريبية");
     } catch {
       toast.error("حدث خطأ أثناء الحفظ");
@@ -278,10 +261,13 @@ export default function AdminPage() {
         tickerActive: subject.tickerActive || false,
         tickerSpeed: subject.tickerSpeed || 20,
         tickerFontSize: subject.tickerFontSize || "14px",
+        countdownActive: subject.countdownActive || false,
+        countdownTitle: subject.countdownTitle || "الفترة التجريبية تنتهي خلال",
+        countdownEndDate: subject.countdownEndDate || "",
       });
     } else {
       setEditingSubject(null);
-      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px" });
+      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px", countdownActive: false, countdownTitle: "الفترة التجريبية تنتهي خلال", countdownEndDate: "" });
     }
     setOpen(true);
   };
@@ -303,6 +289,9 @@ export default function AdminPage() {
         tickerActive: form.tickerActive || false,
         tickerSpeed: form.tickerSpeed || 20,
         tickerFontSize: form.tickerFontSize || "14px",
+        countdownActive: form.countdownActive,
+        countdownTitle: form.countdownTitle.trim() || "الفترة التجريبية تنتهي خلال",
+        countdownEndDate: form.countdownActive ? form.countdownEndDate : "",
       };
       if (editingSubject) {
         await updateSubject(editingSubject.id, subjectData);
@@ -313,7 +302,7 @@ export default function AdminPage() {
       }
       setOpen(false);
       setEditingSubject(null);
-      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px" });
+      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px", countdownActive: false, countdownTitle: "الفترة التجريبية تنتهي خلال", countdownEndDate: "" });
       await loadSubjects();
     } catch {
       toast.error(editingSubject ? "حدث خطأ أثناء التعديل" : "حدث خطأ أثناء الإضافة");
@@ -755,6 +744,63 @@ export default function AdminPage() {
                           />
                           <Label htmlFor="subject-ticker-active" className="mb-0">إظهار الشريط في صفحة المادة</Label>
                         </div>
+                      </div>
+
+                      {/* ── Countdown settings for this subject ── */}
+                      <div className="space-y-4 rounded-lg border p-4">
+                        <p className="text-sm font-bold text-muted-foreground">العد التنازلي لهذه المادة</p>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            id="subject-countdown-active"
+                            checked={form.countdownActive}
+                            onChange={(e) => setForm({ ...form, countdownActive: e.target.checked })}
+                            className="w-4 h-4 rounded border-gray-300"
+                          />
+                          <Label htmlFor="subject-countdown-active" className="mb-0">إظهار العد التنازلي في صفحة المادة</Label>
+                        </div>
+
+                        {form.countdownActive && (
+                          <>
+                            <div>
+                              <Label>النص المعروض فوق العداد</Label>
+                              <Input
+                                value={form.countdownTitle}
+                                onChange={(e) => setForm({ ...form, countdownTitle: e.target.value })}
+                                placeholder="مثال: الفترة التجريبية تنتهي خلال / موعد الاختبار"
+                                className="mt-2"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">
+                                اكتب أي نص مثل "موعد الاختبار" أو "الامتحان النهائي يبقى"
+                              </p>
+                            </div>
+                            <div>
+                              <Label>تاريخ ووقت انتهاء العداد</Label>
+                              <input
+                                type="datetime-local"
+                                value={form.countdownEndDate ? form.countdownEndDate.slice(0, 16) : ""}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setForm({ ...form, countdownEndDate: val ? new Date(val).toISOString() : "" });
+                                }}
+                                className="mt-2 flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                dir="ltr"
+                              />
+                              {form.countdownEndDate && (
+                                <p className="text-sm font-bold text-primary mt-2 flex items-center gap-2">
+                                  <Calendar className="h-4 w-4" />
+                                  {new Date(form.countdownEndDate).toLocaleString("ar-SA", {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </p>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       <Button
@@ -1341,116 +1387,51 @@ export default function AdminPage() {
                   إعدادات الفترة التجريبية
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-8">
-                {/* ── Homepage countdown ── */}
-                <div className="space-y-4">
-                  <p className="text-sm font-bold text-muted-foreground uppercase tracking-wide">الصفحة الرئيسية</p>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id="trial-active"
-                      checked={trialFormActive}
-                      onChange={(e) => setTrialFormActive(e.target.checked)}
-                      className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
-                    />
-                    <Label htmlFor="trial-active" className="mb-0 text-base font-medium">تفعيل عداد التنازلي</Label>
-                  </div>
-
-                  {trialFormActive && (
-                    <>
-                      <div>
-                        <Label className="text-base">تاريخ ووقت انتهاء الفترة التجريبية</Label>
-                        <input
-                          type="datetime-local"
-                          value={trialFormDate ? trialFormDate.slice(0, 16) : ""}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setTrialFormDate(val ? new Date(val).toISOString() : "");
-                          }}
-                          className="mt-2 flex w-full max-w-sm rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          dir="ltr"
-                        />
-                      </div>
-
-                      {trialFormDate && (
-                        <div className="rounded-lg border p-4 bg-muted/30">
-                          <p className="text-sm text-muted-foreground mb-2">معاينة:</p>
-                          <p className="text-lg font-bold text-primary flex items-center gap-2">
-                            <Calendar className="h-5 w-5" />
-                            {new Date(trialFormDate).toLocaleString("ar-SA", {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        </div>
-                      )}
-                    </>
-                  )}
+              <CardContent className="space-y-6">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="trial-active"
+                    checked={trialFormActive}
+                    onChange={(e) => setTrialFormActive(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <Label htmlFor="trial-active" className="mb-0 text-base font-medium">تفعيل عداد التنازلي</Label>
                 </div>
 
-                <hr />
+                {trialFormActive && (
+                  <>
+                    <div>
+                      <Label className="text-base">تاريخ ووقت انتهاء الفترة التجريبية</Label>
+                      <input
+                        type="datetime-local"
+                        value={trialFormDate ? trialFormDate.slice(0, 16) : ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setTrialFormDate(val ? new Date(val).toISOString() : "");
+                        }}
+                        className="mt-2 flex w-full max-w-sm rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        dir="ltr"
+                      />
+                    </div>
 
-                {/* ── Subject pages countdown ── */}
-                <div className="space-y-4">
-                  <p className="text-sm font-bold text-muted-foreground uppercase tracking-wide">صفحات المواد</p>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id="subject-countdown-active"
-                      checked={subjectCountdownActive}
-                      onChange={(e) => setSubjectCountdownActive(e.target.checked)}
-                      className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
-                    />
-                    <Label htmlFor="subject-countdown-active" className="mb-0 text-base font-medium">إظهار العداد في صفحات المواد</Label>
-                  </div>
-
-                  {subjectCountdownActive && (
-                    <>
-                      <div>
-                        <Label className="text-base">النص المعروض فوق العداد</Label>
-                        <Input
-                          value={subjectCountdownTitle}
-                          onChange={(e) => setSubjectCountdownTitle(e.target.value)}
-                          placeholder="مثال: الفترة التجريبية تنتهي خلال / موعد الاختبار"
-                          className="mt-2 max-w-md"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          يمكنك كتابة أي نص مثل "موعد الاختبار" أو "الامتحان النهائي يبقى"
+                    {trialFormDate && (
+                      <div className="rounded-lg border p-4 bg-muted/30">
+                        <p className="text-sm text-muted-foreground mb-2">معاينة:</p>
+                        <p className="text-lg font-bold text-primary flex items-center gap-2">
+                          <Calendar className="h-5 w-5" />
+                          {new Date(trialFormDate).toLocaleString("ar-SA", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </p>
                       </div>
-
-                      <div>
-                        <Label className="text-base">تاريخ الانتهاء لصفحات المواد (اختياري)</Label>
-                        <input
-                          type="datetime-local"
-                          value={subjectCountdownDate ? subjectCountdownDate.slice(0, 16) : ""}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setSubjectCountdownDate(val ? new Date(val).toISOString() : "");
-                          }}
-                          className="mt-2 flex w-full max-w-sm rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          dir="ltr"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          إذا تُرك فارغاً سيُستخدم نفس تاريخ الصفحة الرئيسية
-                        </p>
-                      </div>
-
-                      {subjectCountdownTitle.trim() && (
-                        <div className="rounded-lg border p-4 bg-muted/30">
-                          <p className="text-sm text-muted-foreground mb-1">معاينة النص:</p>
-                          <p className="text-base font-bold text-primary flex items-center gap-2">
-                            <Clock className="h-4 w-4" />
-                            {subjectCountdownTitle}
-                          </p>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
+                    )}
+                  </>
+                )}
 
                 <Button onClick={handleTrialSave} className="gap-2" disabled={trialSaving}>
                   {trialSaving ? "جاري الحفظ..." : "حفظ الإعدادات"}

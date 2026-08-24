@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import TickerBar from "@/components/TickerBar";
-import TrialCountdown from "@/components/TrialCountdown";
+import { SubjectCountdown } from "@/components/TrialCountdown";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -448,7 +448,7 @@ export default function SubjectPage() {
     <div className="min-h-screen bg-white">
       <Navbar />
 
-      <TrialCountdown variant="subject" />
+      <SubjectCountdown subject={subject} />
 
       {/* Header */}
       <div

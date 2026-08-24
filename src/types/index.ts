@@ -12,6 +12,9 @@ export interface Subject {
   tickerActive?: boolean;
   tickerSpeed?: number;
   tickerFontSize?: string;
+  countdownActive?: boolean;
+  countdownTitle?: string;
+  countdownEndDate?: string;
 }
 
 export interface Video {
