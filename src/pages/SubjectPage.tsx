@@ -90,6 +90,40 @@ import type { Subject, Video, FileItem, Assessment } from "@/types";
     return null;
   };
 
+  type PlayerKind = "youtube" | "telegram" | "file" | "vimeo" | "external";
+
+  /**
+   * Resolves any video URL into the right in-app player:
+   * - youtube: standard iframe embed
+   * - telegram: official t.me post embed (plays public channel videos inline)
+   * - file: direct video file (mp4/webm/ogg/mov or telesco.pe CDN) via <video>
+   * - vimeo: iframe embed
+   * - external: platforms that forbid embedding -> open-externally panel
+   */
+  function resolveVideoPlayer(url: string): { kind: PlayerKind; src?: string } {
+    if (!url) return { kind: "external" };
+
+    const ytId = extractYouTubeId(url);
+    if (ytId) return { kind: "youtube", src: `https://www.youtube.com/embed/${ytId}?autoplay=1` };
+
+    const tg = url.match(/^https?:\/\/(?:www\.)?(?:t\.me|telegram\.me)\/([^/?#]+)(?:\/(\d+))?/i);
+    if (tg) {
+      if (tg[2]) {
+        // Channel post link -> official Telegram embed widget
+        return { kind: "telegram", src: `https://t.me/${tg[1]}/${tg[2]}?embed=1&mode=tme` };
+      }
+      return { kind: "external" }; // plain chat/channel link without post id
+    }
+
+    if (/\.(mp4|webm|ogg|ogv|m4v|mov)(\?|#|$)/i.test(url)) return { kind: "file" };
+    if (/telesco\.pe\//i.test(url)) return { kind: "file" }; // telegram CDN direct files
+
+    const vimeo = url.match(/^https?:\/\/(?:www\.|player\.)?vimeo\.com\/(?:video\/)?(\d+)/i);
+    if (vimeo) return { kind: "vimeo", src: `https://player.vimeo.com/video/${vimeo[1]}?autoplay=1` };
+
+    return { kind: "external" };
+  }
+
   /**
    * Resizes an image file client-side to a small JPEG data URL (~25KB)
    * so thumbnails can be stored directly in the Firestore document
@@ -1197,9 +1231,9 @@ function VideoCard({
   onEdit?: (video: Video) => void;
   onClose?: () => void;
 }) {
-  const youtubeId = video.sourceType === "youtube" ? extractYouTubeId(video.url) : null;
-  const isTelegram = video.sourceType === "telegram";
-  
+  const player = resolveVideoPlayer(video.url);
+  const isTelegram = video.sourceType === "telegram" || /^https?:\/\/(?:www\.)?(?:t\.me|telegram\.me)\//i.test(video.url);
+
   const canPlay = isAdmin || video.isFree || hasSubjectAccess;
 
   const handlePlayClick = () => {
@@ -1223,33 +1257,65 @@ function VideoCard({
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
-          {youtubeId ? (
+          {player.kind === "youtube" && (
             <iframe
               className="h-full w-full"
-              src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1`}
+              src={player.src}
               title={video.title}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
-          ) : (
+          )}
+          {player.kind === "telegram" && (
+            <>
+              <iframe
+                className="h-full w-full bg-white"
+                src={player.src}
+                title={video.title}
+                loading="lazy"
+              />
+              <a
+                href={video.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="absolute bottom-2 left-2 z-10 flex items-center gap-1 rounded-full bg-black/70 px-2.5 py-1 text-[11px] text-white hover:bg-black/90"
+              >
+                <ExternalLink className="h-3 w-3" />
+                فتح في تليجرام
+              </a>
+            </>
+          )}
+          {player.kind === "vimeo" && (
+            <iframe
+              className="h-full w-full"
+              src={player.src}
+              title={video.title}
+              allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+              allowFullScreen
+            />
+          )}
+          {player.kind === "file" && (
             <video
               className="h-full w-full"
               src={video.url}
               controls
               autoPlay
-              muted
               playsInline
-            >
-              <div className="flex h-full flex-col items-center justify-center bg-black text-white p-4">
-                <p className="mb-2 text-lg">{video.title}</p>
-                <Button asChild variant="secondary" size="sm">
-                  <a href={video.url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-4 w-4 ml-1" />
-                    فتح الفيديو
-                  </a>
-                </Button>
-              </div>
-            </video>
+            />
+          )}
+          {player.kind === "external" && (
+            <div className="flex h-full flex-col items-center justify-center gap-3 bg-gradient-to-b from-zinc-900 to-black text-white p-4 text-center">
+              <p className="text-sm font-semibold">{video.title}</p>
+              <p className="text-xs text-white/60 max-w-xs">
+                هذا المصدر يمنع التشغيل المباشر داخل المواقع، شاهد الفيديو في تطبيقه مباشرة
+              </p>
+              <Button asChild variant="secondary" size="sm">
+                <a href={video.url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4 ml-1" />
+                  فتح الفيديو
+                </a>
+              </Button>
+            </div>
           )}
         </div>
         <CardContent className="p-3 flex justify-between items-center">
