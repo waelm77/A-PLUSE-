@@ -31,9 +31,13 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
 
-// Seed default subjects if none exist
+// Seed default subjects if none exist (runs at most once per device)
+const SEED_FLAG = "a-plus-seeded";
+
 export async function seedSubjects() {
   try {
+    if (localStorage.getItem(SEED_FLAG)) return;
+    localStorage.setItem(SEED_FLAG, "1");
     if (useLocalStorage) {
       const existing = getLocalItems<Subject>("subjects");
       if (existing.length > 0) return;
