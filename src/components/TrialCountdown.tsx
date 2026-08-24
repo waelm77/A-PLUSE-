@@ -14,8 +14,16 @@ function getTimeLeft(endDate: string) {
   };
 }
 
-export default function TrialCountdown() {
-  const { endDate, active, loaded, startListening } = useTrialStore();
+export default function TrialCountdown({ variant = "home" }: { variant?: "home" | "subject" }) {
+  const {
+    endDate,
+    active,
+    subjectActive,
+    subjectTitle,
+    subjectEndDate,
+    loaded,
+    startListening,
+  } = useTrialStore();
   const [time, setTime] = useState<ReturnType<typeof getTimeLeft> | null>(null);
 
   useEffect(() => {
@@ -23,15 +31,23 @@ export default function TrialCountdown() {
     return () => unsub();
   }, [startListening]);
 
+  const isEnabled = variant === "home" ? active : subjectActive;
+  const effectiveEndDate =
+    variant === "home"
+      ? endDate
+      : subjectEndDate || endDate;
+
   useEffect(() => {
-    if (!loaded || !active || !endDate) {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (!loaded || !isEnabled || !effectiveEndDate) {
       setTime(null);
       return;
     }
-    setTime(getTimeLeft(endDate));
-    const id = setInterval(() => setTime(getTimeLeft(endDate)), 1000);
+    setTime(getTimeLeft(effectiveEndDate));
+    const id = setInterval(() => setTime(getTimeLeft(effectiveEndDate)), 1000);
     return () => clearInterval(id);
-  }, [active, endDate, loaded]);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [isEnabled, effectiveEndDate, loaded]);
 
   if (!time) return null;
 
@@ -54,14 +70,20 @@ export default function TrialCountdown() {
         {time.expired ? (
           <div className="flex flex-col items-center gap-3">
             <AlertTriangle className="h-10 w-10 text-red-500" />
-            <p className="text-xl font-bold text-red-500">انتهت الفترة التجريبية</p>
+            <p className="text-xl font-bold text-red-500">
+              {variant === "subject"
+                ? `${subjectTitle} — انتهى الوقت`
+                : "انتهت الفترة التجريبية"}
+            </p>
             <p className="text-sm text-muted-foreground">يرجى التواصل مع الإدارة للحصول على اشتراك</p>
           </div>
         ) : (
           <>
             <div className="flex items-center justify-center gap-2 mb-4">
               <Clock className="h-5 w-5 text-primary" />
-              <p className="text-lg font-bold">الفترة التجريبية تنتهي خلال</p>
+              <p className="text-lg font-bold">
+                {variant === "subject" ? subjectTitle : "الفترة التجريبية تنتهي خلال"}
+              </p>
             </div>
             <div className="flex items-center justify-center gap-3 sm:gap-5">
               {units.map((u) => (

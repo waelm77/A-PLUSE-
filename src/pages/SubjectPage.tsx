@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import TickerBar from "@/components/TickerBar";
+import TrialCountdown from "@/components/TrialCountdown";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -71,18 +72,21 @@ import {
 } from "@/services/firestore";
 import type { Subject, Video, FileItem, Assessment } from "@/types";
 
-function extractYouTubeId(url: string): string | null {
-  const patterns = [
-    /youtube\.com\/watch\?v=([^&]+)/,
-    /youtu\.be\/([^?]+)/,
-    /youtube\.com\/embed\/([^?]+)/,
-  ];
-  for (const p of patterns) {
-    const match = url.match(p);
-    if (match) return match[1];
-  }
-  return null;
-}
+  const extractYouTubeId = (url: string): string | null => {
+    if (!url) return null;
+    const patterns = [
+      /(?:youtube\.com|youtube-nocookie\.com)\/(?:watch\?[^#]*?v=|embed\/|shorts\/|live\/|v\/)([a-zA-Z0-9_-]{11})/,
+      /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+    ];
+    for (const p of patterns) {
+      const match = url.match(p);
+      if (match) return match[1];
+    }
+    // Fallback: any 11-char ID in a v= parameter regardless of position
+    const vParam = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+    if (vParam) return vParam[1];
+    return null;
+  };
 
 export default function SubjectPage() {
   const { id } = useParams<{ id: string }>();
@@ -443,6 +447,8 @@ export default function SubjectPage() {
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
+
+      <TrialCountdown variant="subject" />
 
       {/* Header */}
       <div
@@ -1154,7 +1160,17 @@ function VideoCard({
               src={`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`}
               alt={video.title}
               className="h-full w-full object-cover"
-              onError={(e) => { e.currentTarget.style.display = "none"; }}
+              onError={(e) => {
+                const img = e.currentTarget;
+                const id = youtubeId;
+                if (img.src.includes("hqdefault")) {
+                  img.src = `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
+                } else if (img.src.includes("mqdefault")) {
+                  img.src = `https://img.youtube.com/vi/${id}/default.jpg`;
+                } else {
+                  img.style.display = "none";
+                }
+              }}
             />
           ) : (
             <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
