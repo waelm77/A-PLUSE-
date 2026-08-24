@@ -601,7 +601,7 @@ export default function SubjectPage() {
               <CardContent className="p-4 flex flex-col gap-3">
                 <p className="font-semibold flex items-center gap-2">
                   <Lock className="h-5 w-5" />
-                  المحتوى المغلق يحتاج إلى تسجيل دخول الطالب
+                  لمشاهدة المحتوى المدفوع يرجى تسجيل الدخول
                 </p>
                 <Button
                   variant="secondary"
