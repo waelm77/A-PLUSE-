@@ -12,6 +12,9 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     cssMinify: false,
+    // Wider device support: transpiles down to iOS 12+/Safari 12+, Chrome 80+,
+    // so students on older iPhones/iPads can use the platform
+    target: 'es2018',
     rollupOptions: {
       output: {
         manualChunks(id) {
