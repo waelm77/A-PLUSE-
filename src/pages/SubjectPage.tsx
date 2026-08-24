@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import TickerBar from "@/components/TickerBar";
@@ -31,6 +31,8 @@ import {
   Download,
   Plus,
   Youtube,
+  ImagePlus,
+  X,
   ExternalLink,
   CheckCircle2,
   Circle,
@@ -88,6 +90,68 @@ import type { Subject, Video, FileItem, Assessment } from "@/types";
     return null;
   };
 
+  /**
+   * Resizes an image file client-side to a small JPEG data URL (~25KB)
+   * so thumbnails can be stored directly in the Firestore document
+   * (well under the 1MB doc limit, no Storage bucket needed).
+   */
+  function compressImage(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const maxW = 480;
+          const scale = Math.min(1, maxW / img.width);
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return reject(new Error("canvas unavailable"));
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", 0.75));
+        };
+        img.onerror = () => reject(new Error("invalid image"));
+        img.src = reader.result as string;
+      };
+      reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /** Video thumbnail: admin-uploaded image only (manual upload is the sole source). */
+  function VideoThumb({ video }: { video: Video }) {
+    const src = video.thumbnail;
+    const [prevSrc, setPrevSrc] = useState(src);
+    const [broken, setBroken] = useState(false);
+    if (prevSrc !== src) {
+      setPrevSrc(src);
+      setBroken(false);
+    }
+
+    if (!src || broken) {
+      return (
+        <div className="flex h-full min-h-[120px] items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
+          {video.sourceType === "youtube" ? (
+            <Youtube className="h-10 w-10 text-red-500" />
+          ) : (
+            <Play className="h-10 w-10 text-primary/60" />
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <img
+        src={src}
+        alt={video.title}
+        loading="lazy"
+        className="h-full w-full object-cover"
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+
 export default function SubjectPage() {
   const { id } = useParams<{ id: string }>();
   const { user, studentSession } = useAuthStore();
@@ -113,6 +177,23 @@ export default function SubjectPage() {
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const thumbInputRef = useRef<HTMLInputElement>(null);
+  const [thumbBusy, setThumbBusy] = useState(false);
+
+  const handleThumbSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setThumbBusy(true);
+    try {
+      const dataUrl = await compressImage(file);
+      setVideoForm((f) => ({ ...f, thumbnail: dataUrl }));
+    } catch {
+      toast.error("فشل معالجة الصورة، جرّب صورة أخرى");
+    } finally {
+      setThumbBusy(false);
+    }
+  };
 
   const VIDEO_COLORS = ["#3B82F6", "#22C55E", "#F97316", "#8B5CF6", "#EC4899", "#14B8A6", "#EAB308", "#84CC16", "#06B6D4", "#F43F5E"];
   const [videoForm, setVideoForm] = useState({
@@ -927,6 +1008,53 @@ export default function SubjectPage() {
               />
             </div>
             <div>
+              <Label>الصورة المصغرة</Label>
+              <input
+                type="file"
+                ref={thumbInputRef}
+                accept="image/*"
+                className="hidden"
+                onChange={handleThumbSelect}
+              />
+              {videoForm.thumbnail ? (
+                <div className="relative mt-2">
+                  <img
+                    src={videoForm.thumbnail}
+                    alt="معاينة الصورة المصغرة"
+                    className="h-32 w-full rounded-lg border object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setVideoForm((f) => ({ ...f, thumbnail: "" }))}
+                    className="absolute top-1 left-1 rounded-full bg-black/70 p-1 text-white shadow hover:bg-black/90"
+                    aria-label="إزالة الصورة"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => thumbInputRef.current?.click()}
+                    className="absolute bottom-1 left-1 rounded-full bg-black/70 px-2 py-1 text-[10px] text-white shadow hover:bg-black/90"
+                  >
+                    تغيير
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => thumbInputRef.current?.click()}
+                  disabled={thumbBusy}
+                  className="mt-2 flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed py-6 text-muted-foreground transition hover:bg-muted/50 disabled:opacity-60"
+                >
+                  <ImagePlus className="h-5 w-5" />
+                  <span className="text-xs font-medium">
+                    {thumbBusy ? "جاري المعالجة..." : "رفع صورة من الجهاز"}
+                  </span>
+                  <span className="text-[10px] opacity-70">تُضغط تلقائياً لتصبح خفيفة وسريعة</span>
+                </button>
+              )}
+            </div>
+            <div>
               <Label>اللون المميز</Label>
               <div className="flex flex-wrap gap-2 mt-2">
                 {VIDEO_COLORS.map((c) => (
@@ -1153,34 +1281,7 @@ function VideoCard({
       <div className="flex flex-col sm:flex-row">
         {/* Thumbnail */}
         <div className="relative w-full sm:w-48 shrink-0 bg-muted">
-          {video.thumbnail ? (
-            <img src={video.thumbnail} alt={video.title} className="h-full w-full object-cover" />
-          ) : youtubeId ? (
-            <img
-              src={`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`}
-              alt={video.title}
-              className="h-full w-full object-cover"
-              onError={(e) => {
-                const img = e.currentTarget;
-                const id = youtubeId;
-                if (img.src.includes("hqdefault")) {
-                  img.src = `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
-                } else if (img.src.includes("mqdefault")) {
-                  img.src = `https://img.youtube.com/vi/${id}/default.jpg`;
-                } else {
-                  img.style.display = "none";
-                }
-              }}
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
-              {video.sourceType === "youtube" ? (
-                <Youtube className="h-10 w-10 text-red-500" />
-              ) : (
-                <Play className="h-10 w-10 text-primary/60" />
-              )}
-            </div>
-          )}
+          <VideoThumb video={video} />
           <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg">
               {canPlay ? (
