@@ -408,8 +408,8 @@ export default function AdminPage() {
       await deleteStudent(id);
       toast.success("تم حذف الطالب بنجاح");
       await loadStudents();
-    } catch {
-      toast.error("حدث خطأ أثناء الحذف");
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : "حدث خطأ أثناء الحذف");
     }
   };
 

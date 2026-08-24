@@ -492,8 +492,8 @@ export default function SubjectPage() {
       if (type === "assessment") await deleteAssessment(itemId);
       toast.success("تم الحذف بنجاح");
       await loadData();
-    } catch {
-      toast.error("حدث خطأ أثناء الحذف");
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : "حدث خطأ أثناء الحذف");
     }
   };
 

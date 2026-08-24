@@ -31,6 +31,18 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
 
+/**
+ * Verifies a document was truly removed from Firestore after a delete call.
+ * Catches silent failures (rules, stale cache) so the UI never reports
+ * success while the document still exists server-side.
+ */
+async function assertDeleted(collectionName: string, id: string): Promise<void> {
+  const snap = await getDoc(doc(db, collectionName, id));
+  if (snap.exists()) {
+    throw new Error("تعذر الحذف من قاعدة البيانات، تحقق من الاتصال وصلاحيات الدخول ثم أعد المحاولة");
+  }
+}
+
 // Seed default subjects if none exist (runs at most once per device)
 const SEED_FLAG = "a-plus-seeded";
 
@@ -293,6 +305,7 @@ export async function deleteVideo(id: string): Promise<void> {
     return;
   }
   await deleteDoc(doc(db, "videos", id));
+  await assertDeleted("videos", id);
 }
 
 export async function toggleVideoFreeStatus(id: string, isFree: boolean): Promise<void> {
@@ -434,6 +447,7 @@ export async function deleteFile(id: string): Promise<void> {
     return;
   }
   await deleteDoc(doc(db, "files", id));
+  await assertDeleted("files", id);
 }
 
 // Assessments (Practice Tests)
@@ -483,6 +497,7 @@ export async function deleteAssessment(id: string): Promise<void> {
     return;
   }
   await deleteDoc(doc(db, "assessments", id));
+  await assertDeleted("assessments", id);
 }
 
 // Progress Tracking
@@ -633,6 +648,7 @@ export async function deleteStudent(id: string): Promise<void> {
     return;
   }
   await deleteDoc(doc(db, "students", id));
+  await assertDeleted("students", id);
 }
 
 export async function getStudentByUsername(username: string): Promise<Student | null> {
