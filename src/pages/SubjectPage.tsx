@@ -90,12 +90,14 @@ import type { Subject, Video, FileItem, Assessment } from "@/types";
     return null;
   };
 
-  type PlayerKind = "youtube" | "telegram" | "file" | "vimeo" | "external";
+  type PlayerKind = "youtube" | "telegram" | "telegramPrivate" | "file" | "vimeo" | "external";
 
   /**
    * Resolves any video URL into the right in-app player:
    * - youtube: standard iframe embed
-   * - telegram: official t.me post embed (plays public channel videos inline)
+   * - telegram: official t.me post embed (public channel videos play inline)
+   * - telegramPrivate: private-channel posts (t.me/c/...) or invite links can't
+   *   be embedded — caller must open Telegram directly on user click
    * - file: direct video file (mp4/webm/ogg/mov or telesco.pe CDN) via <video>
    * - vimeo: iframe embed
    * - external: platforms that forbid embedding -> open-externally panel
@@ -106,13 +108,17 @@ import type { Subject, Video, FileItem, Assessment } from "@/types";
     const ytId = extractYouTubeId(url);
     if (ytId) return { kind: "youtube", src: `https://www.youtube.com/embed/${ytId}?autoplay=1` };
 
+    // Private channel post (t.me/c/<internalId>/<postId>) or invite link
+    if (/^https?:\/\/(?:www\.)?(?:t\.me|telegram\.me)\/c\/\d+\/\d+/i.test(url)) return { kind: "telegramPrivate" };
+    if (/^https?:\/\/(?:www\.)?(?:t\.me|telegram\.me)\/(?:\+|joinchat\/)/i.test(url)) return { kind: "telegramPrivate" };
+
     const tg = url.match(/^https?:\/\/(?:www\.)?(?:t\.me|telegram\.me)\/([^/?#]+)(?:\/(\d+))?/i);
     if (tg) {
       if (tg[2]) {
-        // Channel post link -> official Telegram embed widget
+        // Public channel post link -> official Telegram embed widget
         return { kind: "telegram", src: `https://t.me/${tg[1]}/${tg[2]}?embed=1&mode=tme` };
       }
-      return { kind: "external" }; // plain chat/channel link without post id
+      return { kind: "telegramPrivate" }; // plain chat/channel link without post id
     }
 
     if (/\.(mp4|webm|ogg|ogv|m4v|mov)(\?|#|$)/i.test(url)) return { kind: "file" };
@@ -1237,11 +1243,18 @@ function VideoCard({
   const canPlay = isAdmin || video.isFree || hasSubjectAccess;
 
   const handlePlayClick = () => {
-    if (canPlay) {
-      onPlay();
-    } else {
+    if (!canPlay) {
       onOpenAccess();
+      return;
     }
+    // Private Telegram channels can't be embedded — jump straight to the
+    // app on this click (direct user gesture avoids popup blockers)
+    if (player.kind === "telegramPrivate" || player.kind === "external") {
+      window.open(video.url, "_blank", "noopener,noreferrer");
+      toast.success("تم فتح الفيديو في تطبيقه");
+      return;
+    }
+    onPlay();
   };
 
   const typeColor = video.color || ({ theory: "#3B82F6", review: "#22C55E", practical: "#F97316" }[video.type] || color);
@@ -1303,12 +1316,23 @@ function VideoCard({
               playsInline
             />
           )}
-          {player.kind === "external" && (
+          {(player.kind === "external" || player.kind === "telegramPrivate") && (
             <div className="flex h-full flex-col items-center justify-center gap-3 bg-gradient-to-b from-zinc-900 to-black text-white p-4 text-center">
-              <p className="text-sm font-semibold">{video.title}</p>
-              <p className="text-xs text-white/60 max-w-xs">
-                هذا المصدر يمنع التشغيل المباشر داخل المواقع، شاهد الفيديو في تطبيقه مباشرة
-              </p>
+              {player.kind === "telegramPrivate" ? (
+                <>
+                  <p className="text-sm font-semibold">{video.title}</p>
+                  <p className="text-xs text-white/60 max-w-xs">
+                    هذه القناة خاصة، سيتم فتح الفيديو في تطبيق تليجرام مباشرة عند الضغط على زر التشغيل
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold">{video.title}</p>
+                  <p className="text-xs text-white/60 max-w-xs">
+                    هذا المصدر يمنع التشغيل المباشر داخل المواقع، شاهد الفيديو في تطبيقه مباشرة
+                  </p>
+                </>
+              )}
               <Button asChild variant="secondary" size="sm">
                 <a href={video.url} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="h-4 w-4 ml-1" />
