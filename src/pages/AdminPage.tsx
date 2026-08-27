@@ -41,6 +41,11 @@ import {
   Clock,
   Calendar,
   Search,
+  BarChart3,
+  Eye,
+  Flame,
+  Timer,
+  TrendingUp,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useTrialStore } from "@/store/trialStore";
@@ -58,9 +63,10 @@ import {
   getTicker,
   updateTicker,
   getAdmins,
+  getStats,
 } from "@/services/firestore";
 import { AVAILABLE_ICONS, COLORS } from "@/lib/constants";
-import type { Subject, Student, Ticker, Admin } from "@/types";
+import type { Subject, Student, Ticker, Admin, StatsData } from "@/types";
 
 export default function AdminPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
@@ -80,6 +86,21 @@ export default function AdminPage() {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
+
+  // ─── Analytics State ──
+  const [stats, setStats] = useState<StatsData | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  const loadStats = async () => {
+    try {
+      const data = await getStats();
+      setStats(data);
+    } catch (e) {
+      console.error("Load stats error:", e);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -225,6 +246,7 @@ export default function AdminPage() {
     loadStudents();
     loadAdmins();
     loadTicker();
+    loadStats();
     /* eslint-enable react-hooks/set-state-in-effect */
 
     // Realtime listeners keep every count/list instantly in sync with the
@@ -576,6 +598,10 @@ export default function AdminPage() {
             <TabsTrigger value="trial" className="gap-2">
               <Clock className="h-4 w-4" />
               الفترة التجريبية
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="gap-2">
+              <BarChart3 className="h-4 w-4" />
+              الإحصائيات
             </TabsTrigger>
           </TabsList>
 
@@ -1462,6 +1488,114 @@ export default function AdminPage() {
                 </Button>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ════════ Analytics Tab ════════ */}
+          <TabsContent value="analytics">
+            {statsLoading ? (
+              <div className="flex justify-center py-16">
+                <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+              </div>
+            ) : stats ? (
+              <div className="space-y-6">
+                {/* Overview cards */}
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <Card className="glass border-none">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                        <Eye className="h-4 w-4" />
+                        زوار اليوم
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-4xl font-black text-primary">{stats.visitorsToday}</div>
+                      <p className="text-xs text-muted-foreground mt-1">جهاز فريد هذا اليوم</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="glass border-none">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        إجمالي الزوار
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-4xl font-black text-primary">{stats.totalVisitors}</div>
+                      <p className="text-xs text-muted-foreground mt-1">أجهزة فريدة منذ البداية</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="glass border-none">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4" />
+                        إجمالي المشاهدات
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-4xl font-black text-primary">{stats.totalPageviews}</div>
+                      <p className="text-xs text-muted-foreground mt-1">مرات فتح الصفحات</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="glass border-none">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                        <Timer className="h-4 w-4" />
+                        ساعات المشاهدة
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-4xl font-black text-primary">{stats.totalWatchHours}</div>
+                      <p className="text-xs text-muted-foreground mt-1">ساعة مشاهدة فعلية</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Top videos table */}
+                <Card className="glass border-none">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg font-bold flex items-center gap-2">
+                      <Flame className="h-5 w-5 text-orange-500" />
+                      الفيديوهات الأكثر مشاهدة
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">مرتبة حسب عدد مرات التشغيل</p>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {stats.topVideos.length === 0 ? (
+                      <div className="p-6 text-center text-sm text-muted-foreground">
+                        لا توجد مشاهدات مسجلة بعد. شغّل بعض الفيديوهات لتظهر هنا.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-10 text-center">#</TableHead>
+                              <TableHead>الفيديو</TableHead>
+                              <TableHead className="text-center">المشاهدات</TableHead>
+                              <TableHead className="text-center">وقت المشاهدة</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {stats.topVideos.map((v, i) => (
+                              <TableRow key={v.videoId}>
+                                <TableCell className="text-center font-bold text-muted-foreground">{i + 1}</TableCell>
+                                <TableCell className="font-medium max-w-xs truncate">{v.title}</TableCell>
+                                <TableCell className="text-center font-bold">{v.views}</TableCell>
+                                <TableCell className="text-center">
+                                  {Math.floor((v.watchSeconds || 0) / 60)} دقيقة
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <div className="py-10 text-center text-muted-foreground">تعذر تحميل الإحصائيات</div>
+            )}
           </TabsContent>
         </Tabs>
       </div>

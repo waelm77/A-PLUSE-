@@ -71,6 +71,9 @@ import {
   registerDevice,
   getDeviceId,
   getDeviceName,
+  trackVisit,
+  trackVideoPlay,
+  trackVideoWatchTime,
 } from "@/services/firestore";
 import type { Subject, Video, FileItem, Assessment } from "@/types";
 
@@ -301,6 +304,7 @@ export default function SubjectPage() {
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
     if (id) loadData();
+    trackVisit(getDeviceId());
     /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -1254,6 +1258,10 @@ function VideoCard({
       onOpenAccess();
       return;
     }
+    // Count the play (embeddable sources) for analytics
+    if (!player.kind.startsWith("telegramPrivate") && player.kind !== "external") {
+      trackVideoPlay(video);
+    }
     // Private Telegram channels can't be embedded — jump straight to the
     // app on this click (direct user gesture avoids popup blockers)
     if (player.kind === "telegramPrivate" || player.kind === "external") {
@@ -1263,6 +1271,21 @@ function VideoCard({
     }
     onPlay();
   };
+
+  // Accumulate real watch time while the video is active in the player.
+  useEffect(() => {
+    if (!isActive || !canPlay) return;
+    if (player.kind !== "youtube" && player.kind !== "bunny" && player.kind !== "vimeo" && player.kind !== "file") return;
+    const timer = setInterval(() => {
+      trackVideoWatchTime(video.id, 10);
+    }, 10_000);
+    return () => {
+      clearInterval(timer);
+      // flush a final small increment so short replays still count
+      trackVideoWatchTime(video.id, 1);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, canPlay, video.id]);
 
   const typeColor = video.color || ({ theory: "#3B82F6", review: "#22C55E", practical: "#F97316" }[video.type] || color);
 

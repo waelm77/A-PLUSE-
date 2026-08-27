@@ -13,7 +13,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo, Ticker, Admin } from "../types";
+import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo, Ticker, Admin, DailyVisit, VideoStats } from "../types";
 
 const useLocalStorage = false;
 
@@ -817,4 +817,158 @@ export async function getTrialSettings(): Promise<{ endDate: string; active: boo
 
 export async function updateTrialSettings(data: { endDate: string; active: boolean }): Promise<void> {
   await setDoc(doc(db, "settings", "trial"), data, { merge: true });
+}
+
+// ─── Statistics ────────────────────────────────────────────────
+
+/** Local YYYY-MM-DD so "visitors today" aligns with the admins' local day. */
+function todayKey(): string {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+let lastVisitBeat = 0;
+
+/**
+ * Registers a visit when a page opens. Keeps a single-document-per-day counter
+ * with a unique device set so refreshes don't inflate "visitors" but total
+ * pageviews still add up. Throttled so a single page load counts once.
+ */
+export async function trackVisit(deviceId: string): Promise<void> {
+  try {
+    const now = Date.now();
+    if (now - lastVisitBeat < 30_000) return;
+    lastVisitBeat = now;
+
+    const key = todayKey();
+    const ref = doc(db, "stats", `visit_${key}`);
+    const snap = await getDoc(ref);
+    const existing = snap.exists() ? (snap.data() as DailyVisit) : null;
+
+    const deviceIds = existing?.deviceIds?.includes(deviceId)
+      ? existing.deviceIds
+      : [...(existing?.deviceIds || []), deviceId];
+
+    await setDoc(
+      ref,
+      { date: key, deviceIds, pageviews: (existing?.pageviews || 0) + 1 },
+      { merge: true }
+    );
+  } catch (e) {
+    console.error("trackVisit error:", e);
+  }
+}
+
+/**
+ * Increments a video's play counter (deduped per video per session) and records
+ * a dated play for the trend view.
+ */
+export async function trackVideoPlay(video: Video): Promise<void> {
+  try {
+    const key = video.id;
+    const statKey = todayKey();
+
+    const events = localStorage.getItem(`a-plus-played-${key}`);
+    if (events) {
+      const map = JSON.parse(events) as Record<string, boolean>;
+      if (map[statKey]) return; // already counted this video today
+      map[statKey] = true;
+      localStorage.setItem(`a-plus-played-${key}`, JSON.stringify(map));
+    } else {
+      localStorage.setItem(`a-plus-played-${key}`, JSON.stringify({ [statKey]: true }));
+    }
+
+    const ref = doc(db, "stats", `video_${key}`);
+    const snap = await getDoc(ref);
+    const existing = snap.exists() ? (snap.data() as VideoStats) : null;
+
+    await setDoc(
+      ref,
+      {
+        videoId: video.id,
+        subjectId: video.subjectId,
+        title: video.title,
+        views: (existing?.views || 0) + 1,
+        watchSeconds: existing?.watchSeconds || 0,
+        lastViewedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+
+    // dated play for "views per day"
+    await setDoc(doc(db, "stats", `play_${key}_${statKey}`), {
+      videoId: video.id,
+      date: statKey,
+      count: 1,
+    }, { merge: true });
+  } catch (e) {
+    console.error("trackVideoPlay error:", e);
+  }
+}
+
+/**
+ * Adds elapsed watch time to a video (called periodically while playing).
+ * Throttled server-side-ish via increments to stay cheap.
+ */
+export async function trackVideoWatchTime(videoId: string, seconds: number): Promise<void> {
+  if (!videoId || seconds <= 0) return;
+  try {
+    const ref = doc(db, "stats", `video_${videoId}`);
+    await setDoc(ref, { watchSeconds: increment(seconds) }, { merge: true });
+  } catch (e) {
+    console.error("trackVideoWatchTime error:", e);
+  }
+}
+
+export interface StatsData {
+  visitorsToday: number;
+  totalVisitors: number;
+  totalPageviews: number;
+  topVideos: VideoStats[];
+  totalVideos: number;
+  totalWatchHours: number;
+}
+
+/**
+ * Aggregates all analytics for the admin dashboard.
+ */
+export async function getStats(): Promise<StatsData> {
+  const visitsSnap = await getDocs(collection(db, "stats"));
+  const visitDocs: DailyVisit[] = [];
+  const videoMap = new Map<string, VideoStats>();
+  let totalWatchSeconds = 0;
+
+  for (const d of visitsSnap.docs) {
+    const data = d.data();
+    if (d.id.startsWith("visit_")) {
+      visitDocs.push(data as DailyVisit);
+    } else if (d.id.startsWith("video_")) {
+      const vs = data as VideoStats;
+      videoMap.set(vs.videoId, vs);
+      totalWatchSeconds += vs.watchSeconds || 0;
+    }
+  }
+
+  const todayV = todayKey();
+  const visitorsToday = visitDocs
+    .filter((v) => v.date === todayV)
+    .reduce((sum, v) => sum + v.deviceIds.length, 0);
+  const uniqueAll = new Set<string>();
+  visitDocs.forEach((v) => v.deviceIds.forEach((id) => uniqueAll.add(id)));
+  const totalPageviews = visitDocs.reduce((sum, v) => sum + (v.pageviews || 0), 0);
+
+  const topVideos = Array.from(videoMap.values())
+    .sort((a, b) => (b.views || 0) - (a.views || 0))
+    .slice(0, 10);
+
+  return {
+    visitorsToday,
+    totalVisitors: uniqueAll.size,
+    totalPageviews,
+    topVideos,
+    totalVideos: videoMap.size,
+    totalWatchHours: Math.round((totalWatchSeconds / 3600) * 10) / 10,
+  };
 }

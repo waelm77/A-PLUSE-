@@ -102,3 +102,37 @@ export interface Ticker {
   speed?: number;
   fontSize?: string;
 }
+
+// ─── Statistics ────────────────────────────────────────────────
+
+/** Uniquely identifies a browser/device for visitor counting (spam-safe). */
+export interface DailyVisit {
+  date: string;       // YYYY-MM-DD (local)
+  deviceIds: string[]; // unique device ids seen that day
+  pageviews: number;  // total raw page loads
+}
+
+export interface VideoStats {
+  videoId: string;
+  subjectId: string;
+  title: string;
+  views: number;          // number of times play was started
+  watchSeconds: number;   // cumulative watch time
+  lastViewedAt: string;
+}
+
+export interface VisitorSession {
+  deviceId: string;
+  firstSeen: string;
+  lastSeen: string;
+  visits: number;
+}
+
+export interface StatsData {
+  visitorsToday: number;
+  totalVisitors: number;
+  totalPageviews: number;
+  topVideos: VideoStats[];
+  totalVideos: number;
+  totalWatchHours: number;
+}
