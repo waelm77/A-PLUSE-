@@ -11,6 +11,7 @@ import {
   updateDoc,
   increment,
   setDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo, Ticker, Admin, DailyVisit, VideoStats } from "../types";
@@ -971,4 +972,30 @@ export async function getStats(): Promise<StatsData> {
     totalVideos: videoMap.size,
     totalWatchHours: Math.round((totalWatchSeconds / 3600) * 10) / 10,
   };
+}
+
+/**
+ * Deletes every document in the stats collection so analytics start from zero.
+ * Deletes in Firestore-managed batches of 500 to stay within write limits.
+ * Also clears the per-device "already counted today" flags so a new term/year
+ * starts counting afresh.
+ */
+export async function resetStats(): Promise<void> {
+  // Clear local dedup flags for plays/visits so users aren't blocked from
+  // re-counting in the new period
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith("a-plus-played-")) {
+      localStorage.removeItem(key);
+    }
+  }
+
+  // Delete all stats docs collection group-style in batches
+  const all = await getDocs(collection(db, "stats"));
+  const docs = all.docs.map((d) => d);
+  for (let i = 0; i < docs.length; i += 500) {
+    const batch = writeBatch(db);
+    docs.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
 }

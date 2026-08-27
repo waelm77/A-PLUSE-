@@ -64,6 +64,7 @@ import {
   updateTicker,
   getAdmins,
   getStats,
+  resetStats,
 } from "@/services/firestore";
 import { AVAILABLE_ICONS, COLORS } from "@/lib/constants";
 import type { Subject, Student, Ticker, Admin, StatsData } from "@/types";
@@ -90,6 +91,7 @@ export default function AdminPage() {
   // ─── Analytics State ──
   const [stats, setStats] = useState<StatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [resetting, setResetting] = useState(false);
 
   const loadStats = async () => {
     try {
@@ -99,6 +101,21 @@ export default function AdminPage() {
       console.error("Load stats error:", e);
     } finally {
       setStatsLoading(false);
+    }
+  };
+
+  const handleResetStats = async () => {
+    if (!confirm("هل أنت متأكد من مسح كل الإحصائيات؟\nسيبدأ العد من الصفر ولن يمكن التراجع.")) return;
+    setResetting(true);
+    try {
+      await resetStats();
+      await loadStats();
+      toast.success("تم مسح الإحصائيات، بدأ العد من الصفر");
+    } catch (e) {
+      console.error("Reset stats error:", e);
+      toast.error("حدث خطأ أثناء مسح الإحصائيات");
+    } finally {
+      setResetting(false);
     }
   };
   const [form, setForm] = useState({
@@ -1498,6 +1515,17 @@ export default function AdminPage() {
               </div>
             ) : stats ? (
               <div className="space-y-6">
+                {/* Reset button */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    تُستخدم الإحصائيات الحالية في هذا الترم/العام الدراسي. عند بدء فترة جديدة يمكنك مسحها والعد من الصفر.
+                  </p>
+                  <Button variant="destructive" onClick={handleResetStats} disabled={resetting} className="gap-2 shrink-0">
+                    <Trash2 className="h-4 w-4" />
+                    {resetting ? "جاري المسح..." : "مسح الإحصائيات"}
+                  </Button>
+                </div>
+
                 {/* Overview cards */}
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                   <Card className="glass border-none">
