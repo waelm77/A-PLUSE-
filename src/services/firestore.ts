@@ -263,6 +263,20 @@ export async function getVideosBySubject(subjectId: string): Promise<Video[]> {
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
+async function nextVideoOrder(subjectId: string): Promise<number> {
+  const snapshot = await getDocs(
+    query(collection(db, "videos"), where("subjectId", "==", subjectId))
+  );
+  return snapshot.docs.reduce((max, d) => Math.max(max, (d.data().order as number) ?? 0), -1) + 1;
+}
+
+async function nextFileOrder(subjectId: string): Promise<number> {
+  const snapshot = await getDocs(
+    query(collection(db, "files"), where("subjectId", "==", subjectId))
+  );
+  return snapshot.docs.reduce((max, d) => Math.max(max, (d.data().order as number) ?? 0), -1) + 1;
+}
+
 function clean<T extends Record<string, unknown>>(obj: T): T {
   const cleaned = { ...obj } as Record<string, unknown>;
   for (const key of Object.keys(cleaned)) {
@@ -274,18 +288,21 @@ function clean<T extends Record<string, unknown>>(obj: T): T {
 export async function createVideo(data: Omit<Video, "id" | "createdAt">): Promise<Video> {
   if (useLocalStorage) {
     const items = getLocalItems<Video>("videos");
-    const newItem: Video = { id: generateId(), isFree: data.isFree ?? true, ...data, createdAt: new Date().toISOString() };
-    items.unshift(newItem);
+    const maxOrder = items.reduce((m, v) => Math.max(m, v.order ?? 0), -1);
+    const newItem: Video = { id: generateId(), isFree: data.isFree ?? true, order: maxOrder + 1, ...data, createdAt: new Date().toISOString() };
+    items.push(newItem);
     setLocalItems("videos", items);
     return newItem;
   }
   const cleaned = clean(data);
+  const order = await nextVideoOrder(data.subjectId);
   const ref = await addDoc(collection(db, "videos"), {
     ...cleaned,
+    order,
     isFree: data.isFree ?? true,
     createdAt: serverTimestamp(),
   });
-  return { id: ref.id, ...data, isFree: data.isFree ?? true, createdAt: new Date().toISOString() };
+  return { id: ref.id, ...data, isFree: data.isFree ?? true, order, createdAt: new Date().toISOString() };
 }
 
 export async function updateVideo(id: string, data: Partial<Omit<Video, "id" | "createdAt">>): Promise<void> {
@@ -434,21 +451,25 @@ export async function reorderFiles(orderedIds: string[]): Promise<void> {
 export async function createFile(data: Omit<FileItem, "id" | "createdAt" | "downloads">): Promise<FileItem> {
   if (useLocalStorage) {
     const items = getLocalItems<FileItem>("files");
+    const maxOrder = items.reduce((m, f) => Math.max(m, f.order ?? 0), -1);
     const newItem: FileItem = {
       id: generateId(),
       ...data,
+      order: maxOrder + 1,
       isFree: data.isFree ?? true,
       canDownload: data.canDownload ?? true,
       canView: data.canView ?? true,
       downloads: 0,
       createdAt: new Date().toISOString(),
     };
-    items.unshift(newItem);
+    items.push(newItem);
     setLocalItems("files", items);
     return newItem;
   }
+  const order = await nextFileOrder(data.subjectId);
   const ref = await addDoc(collection(db, "files"), {
     ...clean(data),
+    order,
     isFree: data.isFree ?? true,
     canDownload: data.canDownload ?? true,
     canView: data.canView ?? true,
@@ -458,6 +479,7 @@ export async function createFile(data: Omit<FileItem, "id" | "createdAt" | "down
   return {
     id: ref.id,
     ...data,
+    order,
     isFree: data.isFree ?? true,
     canDownload: data.canDownload ?? true,
     canView: data.canView ?? true,
@@ -513,18 +535,27 @@ export async function getAssessmentsBySubject(subjectId: string): Promise<Assess
 export async function createAssessment(data: Omit<Assessment, "id" | "createdAt">): Promise<Assessment> {
   if (useLocalStorage) {
     const items = getLocalItems<Assessment>("assessments");
-    const newItem: Assessment = { id: generateId(), ...data, isFree: data.isFree ?? true, createdAt: new Date().toISOString(), order: items.length };
+    const maxOrder = items.reduce((m, i) => Math.max(m, i.order ?? 0), -1);
+    const newItem: Assessment = { id: generateId(), ...data, isFree: data.isFree ?? true, createdAt: new Date().toISOString(), order: maxOrder + 1 };
     items.push(newItem);
     setLocalItems("assessments", items);
     return newItem;
   }
+  const order = await nextAssessmentOrder(data.subjectId);
   const ref = await addDoc(collection(db, "assessments"), {
     ...data,
     isFree: data.isFree ?? true,
-    order: 0,
+    order,
     createdAt: serverTimestamp(),
   });
-  return { id: ref.id, ...data, isFree: data.isFree ?? true, createdAt: new Date().toISOString() };
+  return { id: ref.id, ...data, isFree: data.isFree ?? true, order, createdAt: new Date().toISOString() };
+}
+
+async function nextAssessmentOrder(subjectId: string): Promise<number> {
+  const snapshot = await getDocs(
+    query(collection(db, "assessments"), where("subjectId", "==", subjectId))
+  );
+  return snapshot.docs.reduce((max, d) => Math.max(max, (d.data().order as number) ?? 0), -1) + 1;
 }
 
 export async function deleteAssessment(id: string): Promise<void> {
