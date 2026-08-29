@@ -74,6 +74,8 @@ import {
   trackVisit,
   trackVideoPlay,
   trackVideoWatchTime,
+  reorderVideos,
+  reorderFiles,
 } from "@/services/firestore";
 import type { Subject, Video, FileItem, Assessment } from "@/types";
 
@@ -229,6 +231,8 @@ export default function SubjectPage() {
   const [submitting, setSubmitting] = useState(false);
   const thumbInputRef = useRef<HTMLInputElement>(null);
   const [thumbBusy, setThumbBusy] = useState(false);
+  const [activeTab, setActiveTab] = useState<"theory" | "review" | "practical" | "files" | "tests">("theory");
+  const [dragId, setDragId] = useState<string | null>(null);
 
   const handleThumbSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -381,9 +385,10 @@ export default function SubjectPage() {
     setCompletedItems(updated);
   };
 
-  const theoryVideos = videos.filter((v) => v.type === "theory");
-  const reviewVideos = videos.filter((v) => v.type === "review");
-  const practicalVideos = videos.filter((v) => v.type === "practical");
+  const byOrder = (a: Video, b: Video) => (a.order ?? 0) - (b.order ?? 0);
+  const theoryVideos = videos.filter((v) => v.type === "theory").sort(byOrder);
+  const reviewVideos = videos.filter((v) => v.type === "review").sort(byOrder);
+  const practicalVideos = videos.filter((v) => v.type === "practical").sort(byOrder);
 
   const openVideoDialog = (video?: Video, presetType?: "theory" | "review" | "practical") => {
     if (video) {
@@ -498,6 +503,43 @@ export default function SubjectPage() {
       await loadData();
     } catch (err) {
       toast.error(err instanceof Error && err.message ? err.message : "حدث خطأ أثناء الحذف");
+    }
+  };
+
+  // Generic drag & drop reorder
+  const handleDragStart = (itemId: string) => {
+    setDragId(itemId);
+  };
+
+  const handleDrop = async (
+    type: "video" | "file",
+    overId: string,
+    currentList: Video[] | FileItem[]
+  ) => {
+    if (!dragId || dragId === overId) { setDragId(null); return; }
+    const fromIndex = currentList.findIndex((i) => i.id === dragId);
+    const overIndex = currentList.findIndex((i) => i.id === overId);
+    setDragId(null);
+    if (fromIndex === -1 || overIndex === -1) return;
+    const reordered: (Video | FileItem)[] = [...currentList];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(overIndex, 0, moved);
+    const orderedIds = reordered.map((i) => i.id);
+    try {
+      if (type === "video") {
+        setVideos((prev) => {
+          const others = prev.filter((v) => !orderedIds.includes(v.id));
+          return [...(reordered as Video[]), ...others];
+        });
+        await reorderVideos(orderedIds);
+      } else {
+        setFilesList(reordered as FileItem[]);
+        await reorderFiles(orderedIds);
+      }
+      toast.success("تم ترتيب المحتوى بنجاح");
+    } catch {
+      toast.error("فشل حفظ الترتيب، أعد المحاولة");
+      await loadData();
     }
   };
 
@@ -667,7 +709,7 @@ export default function SubjectPage() {
           '--accent-foreground': '0 0% 100%',
         } as React.CSSProperties}
       >
-        <Tabs defaultValue="theory" className="w-full">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="w-full">
           <div className="relative mb-6">
             <TabsList className="flex w-full justify-start overflow-x-auto bg-transparent p-0 scrollbar-hide">
               <div className="flex gap-2">
@@ -736,22 +778,30 @@ export default function SubjectPage() {
             {theoryVideos.length > 0 ? (
               <div className="grid gap-4 grid-cols-1">
                 {theoryVideos.map((video) => (
-                  <VideoCard
+                  <div
                     key={video.id}
-                    video={video}
-                    isActive={activeVideo === video.id}
-                    onPlay={() => setActiveVideo(video.id)}
-                    isAdmin={isAdmin}
-                    onDelete={(id) => handleDeleteItem("video", id)}
-                    isCompleted={completedItems.includes(video.id)}
-                    onToggleComplete={handleToggleProgress}
-                    color={subject.color}
-                    hasSubjectAccess={hasSubjectAccess}
-                    onToggleFree={handleToggleFree}
-                    onOpenAccess={openAccessDialog}
-                    onEdit={openVideoDialog}
-                    onClose={() => setActiveVideo(null)}
-                  />
+                    draggable={isAdmin}
+                    onDragStart={() => handleDragStart(video.id)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => handleDrop("video", video.id, theoryVideos)}
+                    className={isAdmin ? "cursor-grab active:cursor-grabbing" : ""}
+                  >
+                    <VideoCard
+                      video={video}
+                      isActive={activeVideo === video.id}
+                      onPlay={() => setActiveVideo(video.id)}
+                      isAdmin={isAdmin}
+                      onDelete={(id) => handleDeleteItem("video", id)}
+                      isCompleted={completedItems.includes(video.id)}
+                      onToggleComplete={handleToggleProgress}
+                      color={subject.color}
+                      hasSubjectAccess={hasSubjectAccess}
+                      onToggleFree={handleToggleFree}
+                      onOpenAccess={openAccessDialog}
+                      onEdit={openVideoDialog}
+                      onClose={() => setActiveVideo(null)}
+                    />
+                  </div>
                 ))}
               </div>
             ) : (
@@ -777,22 +827,30 @@ export default function SubjectPage() {
             {reviewVideos.length > 0 ? (
               <div className="grid gap-4 grid-cols-1">
                 {reviewVideos.map((video) => (
-                  <VideoCard
+                  <div
                     key={video.id}
-                    video={video}
-                    isActive={activeVideo === video.id}
-                    onPlay={() => setActiveVideo(video.id)}
-                    isAdmin={isAdmin}
-                    onDelete={(id) => handleDeleteItem("video", id)}
-                    isCompleted={completedItems.includes(video.id)}
-                    onToggleComplete={handleToggleProgress}
-                    color={subject.color}
-                    hasSubjectAccess={hasSubjectAccess}
-                    onToggleFree={handleToggleFree}
-                    onOpenAccess={openAccessDialog}
-                    onEdit={openVideoDialog}
-                    onClose={() => setActiveVideo(null)}
-                  />
+                    draggable={isAdmin}
+                    onDragStart={() => handleDragStart(video.id)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => handleDrop("video", video.id, reviewVideos)}
+                    className={isAdmin ? "cursor-grab active:cursor-grabbing" : ""}
+                  >
+                    <VideoCard
+                      video={video}
+                      isActive={activeVideo === video.id}
+                      onPlay={() => setActiveVideo(video.id)}
+                      isAdmin={isAdmin}
+                      onDelete={(id) => handleDeleteItem("video", id)}
+                      isCompleted={completedItems.includes(video.id)}
+                      onToggleComplete={handleToggleProgress}
+                      color={subject.color}
+                      hasSubjectAccess={hasSubjectAccess}
+                      onToggleFree={handleToggleFree}
+                      onOpenAccess={openAccessDialog}
+                      onEdit={openVideoDialog}
+                      onClose={() => setActiveVideo(null)}
+                    />
+                  </div>
                 ))}
               </div>
             ) : (
@@ -874,21 +932,29 @@ export default function SubjectPage() {
             {filesList.length > 0 ? (
               <div className="space-y-3">
                 {filesList.map((file) => (
-                  <FileCard
+                  <div
                     key={file.id}
-                    file={file}
-                    isAdmin={isAdmin}
-                    onDelete={(id) => handleDeleteItem("file", id)}
-                    onPreview={setPreviewFile}
-                    isCompleted={completedItems.includes(file.id)}
-                    onToggleComplete={handleToggleProgress}
-                    color={subject.color}
-                    hasSubjectAccess={hasSubjectAccess}
-                    onToggleFree={handleToggleFileFree}
-                    onToggleDownload={handleToggleFileDownload}
-                    onToggleView={handleToggleFileView}
-                    onOpenAccess={openAccessDialog}
-                  />
+                    draggable={isAdmin}
+                    onDragStart={() => handleDragStart(file.id)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => handleDrop("file", file.id, filesList)}
+                    className={isAdmin ? "cursor-grab active:cursor-grabbing" : ""}
+                  >
+                    <FileCard
+                      file={file}
+                      isAdmin={isAdmin}
+                      onDelete={(id) => handleDeleteItem("file", id)}
+                      onPreview={setPreviewFile}
+                      isCompleted={completedItems.includes(file.id)}
+                      onToggleComplete={handleToggleProgress}
+                      color={subject.color}
+                      hasSubjectAccess={hasSubjectAccess}
+                      onToggleFree={handleToggleFileFree}
+                      onToggleDownload={handleToggleFileDownload}
+                      onToggleView={handleToggleFileView}
+                      onOpenAccess={openAccessDialog}
+                    />
+                  </div>
                 ))}
               </div>
             ) : (
@@ -914,22 +980,30 @@ export default function SubjectPage() {
             {practicalVideos.length > 0 ? (
               <div className="grid gap-4 grid-cols-1">
                 {practicalVideos.map((video) => (
-                  <VideoCard
+                  <div
                     key={video.id}
-                    video={video}
-                    isActive={activeVideo === video.id}
-                    onPlay={() => setActiveVideo(video.id)}
-                    isAdmin={isAdmin}
-                    onDelete={(id) => handleDeleteItem("video", id)}
-                    isCompleted={completedItems.includes(video.id)}
-                    onToggleComplete={handleToggleProgress}
-                    color={subject.color}
-                    hasSubjectAccess={hasSubjectAccess}
-                    onToggleFree={handleToggleFree}
-                    onOpenAccess={openAccessDialog}
-                    onEdit={openVideoDialog}
-                    onClose={() => setActiveVideo(null)}
-                  />
+                    draggable={isAdmin}
+                    onDragStart={() => handleDragStart(video.id)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => handleDrop("video", video.id, practicalVideos)}
+                    className={isAdmin ? "cursor-grab active:cursor-grabbing" : ""}
+                  >
+                    <VideoCard
+                      video={video}
+                      isActive={activeVideo === video.id}
+                      onPlay={() => setActiveVideo(video.id)}
+                      isAdmin={isAdmin}
+                      onDelete={(id) => handleDeleteItem("video", id)}
+                      isCompleted={completedItems.includes(video.id)}
+                      onToggleComplete={handleToggleProgress}
+                      color={subject.color}
+                      hasSubjectAccess={hasSubjectAccess}
+                      onToggleFree={handleToggleFree}
+                      onOpenAccess={openAccessDialog}
+                      onEdit={openVideoDialog}
+                      onClose={() => setActiveVideo(null)}
+                    />
+                  </div>
                 ))}
               </div>
             ) : (

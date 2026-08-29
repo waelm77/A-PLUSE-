@@ -244,7 +244,7 @@ export async function getAllVideos(): Promise<Video[]> {
 export async function getVideosBySubject(subjectId: string): Promise<Video[]> {
   if (useLocalStorage) {
     const items = getLocalItems<Video>("videos").filter((v) => v.subjectId === subjectId);
-    return items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }
   const q = query(
     collection(db, "videos"),
@@ -260,7 +260,7 @@ export async function getVideosBySubject(subjectId: string): Promise<Video[]> {
         createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
       } as Video;
     })
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
 function clean<T extends Record<string, unknown>>(obj: T): T {
@@ -297,6 +297,26 @@ export async function updateVideo(id: string, data: Partial<Omit<Video, "id" | "
     return;
   }
   await updateDoc(doc(db, "videos", id), clean(data as Record<string, unknown>));
+}
+
+/**
+ * Persists a new display order for a list of video ids (index = order).
+ * Uses a batch so the whole reorder is atomic.
+ */
+export async function reorderVideos(orderedIds: string[]): Promise<void> {
+  if (useLocalStorage) {
+    const items = getLocalItems<Video>("videos");
+    const byId = new Map(items.map((v) => [v.id, v]));
+    const ordered = orderedIds.map((id) => byId.get(id)).filter(Boolean) as Video[];
+    const rest = items.filter((v) => !orderedIds.includes(v.id));
+    setLocalItems("videos", [...ordered, ...rest].map((v, i) => ({ ...v, order: i })));
+    return;
+  }
+  const batch = writeBatch(db);
+  orderedIds.forEach((id, index) => {
+    batch.update(doc(db, "videos", id), { order: index });
+  });
+  await batch.commit();
 }
 
 export async function deleteVideo(id: string): Promise<void> {
@@ -376,7 +396,7 @@ export async function getAllFiles(): Promise<FileItem[]> {
 export async function getFilesBySubject(subjectId: string): Promise<FileItem[]> {
   if (useLocalStorage) {
     const items = getLocalItems<FileItem>("files").filter((f) => f.subjectId === subjectId);
-    return items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }
   const q = query(
     collection(db, "files"),
@@ -392,7 +412,23 @@ export async function getFilesBySubject(subjectId: string): Promise<FileItem[]> 
         createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
       } as FileItem;
     })
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+export async function reorderFiles(orderedIds: string[]): Promise<void> {
+  if (useLocalStorage) {
+    const items = getLocalItems<FileItem>("files");
+    const byId = new Map(items.map((f) => [f.id, f]));
+    const ordered = orderedIds.map((id) => byId.get(id)).filter(Boolean) as FileItem[];
+    const rest = items.filter((f) => !orderedIds.includes(f.id));
+    setLocalItems("files", [...ordered, ...rest].map((f, i) => ({ ...f, order: i })));
+    return;
+  }
+  const batch = writeBatch(db);
+  orderedIds.forEach((id, index) => {
+    batch.update(doc(db, "files", id), { order: index });
+  });
+  await batch.commit();
 }
 
 export async function createFile(data: Omit<FileItem, "id" | "createdAt" | "downloads">): Promise<FileItem> {
