@@ -1514,7 +1514,7 @@ function VideoCard({
         {/* Info */}
         <CardContent className="flex-1 p-4 flex flex-col justify-between min-w-0">
           <div>
-            <p className="font-semibold text-lg line-clamp-2">{video.title}</p>
+            <p className="font-semibold text-lg leading-snug">{video.title}</p>
             <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
               {video.type === "theory" && <span>شرح</span>}
               {video.type === "review" && <span>مراجعة</span>}

@@ -595,28 +595,28 @@ export default function AdminPage() {
         </div>
 
         <Tabs defaultValue="subjects" className="w-full">
-          <TabsList className="mb-6">
-            <TabsTrigger value="subjects" className="gap-2">
+          <TabsList className="mb-6 w-full max-w-full justify-start overflow-x-auto whitespace-nowrap scrollbar-hide rounded-lg p-[3px]">
+            <TabsTrigger value="subjects" className="gap-2 shrink-0">
               <BookOpen className="h-4 w-4" />
               المواد الدراسية
             </TabsTrigger>
-            <TabsTrigger value="students" className="gap-2">
+            <TabsTrigger value="students" className="gap-2 shrink-0">
               <Users className="h-4 w-4" />
               إدارة الطلاب
             </TabsTrigger>
-            <TabsTrigger value="admins" className="gap-2">
+            <TabsTrigger value="admins" className="gap-2 shrink-0">
               <User className="h-4 w-4" />
               المشرفين
             </TabsTrigger>
-            <TabsTrigger value="ticker" className="gap-2">
+            <TabsTrigger value="ticker" className="gap-2 shrink-0">
               <ScrollText className="h-4 w-4" />
               الشريط المتحرك
             </TabsTrigger>
-            <TabsTrigger value="trial" className="gap-2">
+            <TabsTrigger value="trial" className="gap-2 shrink-0">
               <Clock className="h-4 w-4" />
               الفترة التجريبية
             </TabsTrigger>
-            <TabsTrigger value="analytics" className="gap-2">
+            <TabsTrigger value="analytics" className="gap-2 shrink-0">
               <BarChart3 className="h-4 w-4" />
               الإحصائيات
             </TabsTrigger>
