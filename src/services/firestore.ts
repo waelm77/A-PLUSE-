@@ -12,7 +12,12 @@ import {
   increment,
   setDoc,
   writeBatch,
+  runTransaction,
+  limit,
+  orderBy,
+  startAfter,
 } from "firebase/firestore";
+import type { DocumentSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo, Ticker, Admin, DailyVisit, VideoStats } from "../types";
 
@@ -263,20 +268,6 @@ export async function getVideosBySubject(subjectId: string): Promise<Video[]> {
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
-async function nextVideoOrder(subjectId: string): Promise<number> {
-  const snapshot = await getDocs(
-    query(collection(db, "videos"), where("subjectId", "==", subjectId))
-  );
-  return snapshot.docs.reduce((max, d) => Math.max(max, (d.data().order as number) ?? 0), -1) + 1;
-}
-
-async function nextFileOrder(subjectId: string): Promise<number> {
-  const snapshot = await getDocs(
-    query(collection(db, "files"), where("subjectId", "==", subjectId))
-  );
-  return snapshot.docs.reduce((max, d) => Math.max(max, (d.data().order as number) ?? 0), -1) + 1;
-}
-
 function clean<T extends Record<string, unknown>>(obj: T): T {
   const cleaned = { ...obj } as Record<string, unknown>;
   for (const key of Object.keys(cleaned)) {
@@ -295,12 +286,15 @@ export async function createVideo(data: Omit<Video, "id" | "createdAt">): Promis
     return newItem;
   }
   const cleaned = clean(data);
-  const order = await nextVideoOrder(data.subjectId);
-  const ref = await addDoc(collection(db, "videos"), {
-    ...cleaned,
-    order,
-    isFree: data.isFree ?? true,
-    createdAt: serverTimestamp(),
+  const videosCol = collection(db, "videos");
+  const ref = doc(videosCol);
+  const counterRef = doc(db, "counters", `videos:${data.subjectId}`);
+  const order = await runTransaction(db, async (tx) => {
+    const counter = await tx.get(counterRef);
+    const next = (counter.data()?.value as number ?? 0) + 1;
+    tx.set(counterRef, { value: next });
+    tx.set(ref, { ...cleaned, order: next, isFree: data.isFree ?? true, createdAt: serverTimestamp() });
+    return next;
   });
   return { id: ref.id, ...data, isFree: data.isFree ?? true, order, createdAt: new Date().toISOString() };
 }
@@ -502,6 +496,22 @@ export async function reorderFiles(orderedIds: string[]): Promise<void> {
   await batch.commit();
 }
 
+export async function reorderAssessments(orderedIds: string[]): Promise<void> {
+  if (useLocalStorage) {
+    const items = getLocalItems<Assessment>("assessments");
+    const byId = new Map(items.map((a) => [a.id, a]));
+    const ordered = orderedIds.map((id) => byId.get(id)).filter(Boolean) as Assessment[];
+    const rest = items.filter((a) => !orderedIds.includes(a.id));
+    setLocalItems("assessments", [...ordered, ...rest].map((a, i) => ({ ...a, order: i })));
+    return;
+  }
+  const batch = writeBatch(db);
+  orderedIds.forEach((id, index) => {
+    batch.update(doc(db, "assessments", id), { order: index });
+  });
+  await batch.commit();
+}
+
 export async function createFile(data: Omit<FileItem, "id" | "createdAt" | "downloads">): Promise<FileItem> {
   if (useLocalStorage) {
     const items = getLocalItems<FileItem>("files");
@@ -520,15 +530,23 @@ export async function createFile(data: Omit<FileItem, "id" | "createdAt" | "down
     setLocalItems("files", items);
     return newItem;
   }
-  const order = await nextFileOrder(data.subjectId);
-  const ref = await addDoc(collection(db, "files"), {
-    ...clean(data),
-    order,
-    isFree: data.isFree ?? true,
-    canDownload: data.canDownload ?? true,
-    canView: data.canView ?? true,
-    downloads: 0,
-    createdAt: serverTimestamp(),
+  const filesCol = collection(db, "files");
+  const ref = doc(filesCol);
+  const counterRef = doc(db, "counters", `files:${data.subjectId}`);
+  const order = await runTransaction(db, async (tx) => {
+    const counter = await tx.get(counterRef);
+    const next = (counter.data()?.value as number ?? 0) + 1;
+    tx.set(counterRef, { value: next });
+    tx.set(ref, {
+      ...clean(data),
+      order: next,
+      isFree: data.isFree ?? true,
+      canDownload: data.canDownload ?? true,
+      canView: data.canView ?? true,
+      downloads: 0,
+      createdAt: serverTimestamp(),
+    });
+    return next;
   });
   return {
     id: ref.id,
@@ -595,21 +613,22 @@ export async function createAssessment(data: Omit<Assessment, "id" | "createdAt"
     setLocalItems("assessments", items);
     return newItem;
   }
-  const order = await nextAssessmentOrder(data.subjectId);
-  const ref = await addDoc(collection(db, "assessments"), {
-    ...data,
-    isFree: data.isFree ?? true,
-    order,
-    createdAt: serverTimestamp(),
+  const assessmentsCol = collection(db, "assessments");
+  const ref = doc(assessmentsCol);
+  const counterRef = doc(db, "counters", `assessments:${data.subjectId}`);
+  const order = await runTransaction(db, async (tx) => {
+    const counter = await tx.get(counterRef);
+    const next = (counter.data()?.value as number ?? 0) + 1;
+    tx.set(counterRef, { value: next });
+    tx.set(ref, {
+      ...data,
+      isFree: data.isFree ?? true,
+      order: next,
+      createdAt: serverTimestamp(),
+    });
+    return next;
   });
   return { id: ref.id, ...data, isFree: data.isFree ?? true, order, createdAt: new Date().toISOString() };
-}
-
-async function nextAssessmentOrder(subjectId: string): Promise<number> {
-  const snapshot = await getDocs(
-    query(collection(db, "assessments"), where("subjectId", "==", subjectId))
-  );
-  return snapshot.docs.reduce((max, d) => Math.max(max, (d.data().order as number) ?? 0), -1) + 1;
 }
 
 export async function deleteAssessment(id: string): Promise<void> {
@@ -843,31 +862,50 @@ export async function registerDevice(
     return { success: true };
   }
 
-  // Firestore
+  // Firestore — atomic read+check+write so two simultaneous registrations
+  // can never push a student's device count past the limit.
   const studentRef = doc(db, "students", studentId);
-  const studentSnap = await getDoc(studentRef);
-  if (!studentSnap.exists()) return { success: false, error: "الطالب غير موجود" };
+  try {
+    const result = await runTransaction(db, async (tx) => {
+      const snap = await tx.get(studentRef);
+      if (!snap.exists()) {
+        throw new Error("NOT_FOUND");
+      }
+      const studentData = snap.data() as Student;
+      const devices = studentData.devices || [];
 
-  const studentData = studentSnap.data() as Student;
-  const devices = studentData.devices || [];
+      const existingIdx = devices.findIndex((d: DeviceInfo) => d.deviceId === deviceInfo.deviceId);
+      if (existingIdx !== -1) {
+        devices[existingIdx] = { ...devices[existingIdx], lastAccess: deviceInfo.lastAccess };
+        tx.update(studentRef, { devices });
+        return { success: true as boolean };
+      }
 
-  const existingIdx = devices.findIndex((d: DeviceInfo) => d.deviceId === deviceInfo.deviceId);
-  if (existingIdx !== -1) {
-    devices[existingIdx] = { ...devices[existingIdx], lastAccess: deviceInfo.lastAccess };
-    await updateDoc(studentRef, { devices });
-    return { success: true };
-  }
+      if (devices.length >= 2) {
+        throw new Error("LIMIT");
+      }
 
-  if (devices.length >= 2) {
+      devices.push(deviceInfo);
+      tx.update(studentRef, { devices });
+      return { success: true as boolean };
+    });
+    return result;
+  } catch (e) {
+    if (e instanceof Error && e.message === "LIMIT") {
+      return {
+        success: false,
+        error: "لقد وصلت للحد الأقصى من الأجهزة المسموح بها (2). يرجى التواصل مع الأدمن لإزالة أحد أجهزتك",
+      };
+    }
+    if (e instanceof Error && e.message === "NOT_FOUND") {
+      return { success: false, error: "الطالب غير موجود" };
+    }
+    // Concurrency conflict — retryable in practice; surface a clear error.
     return {
       success: false,
-      error: "لقد وصلت للحد الأقصى من الأجهزة المسموح بها (2). يرجى التواصل مع الأدمن لإزالة أحد أجهزتك",
+      error: "تعذر تسجيل الجهاز الآن، أعد المحاولة",
     };
   }
-
-  devices.push(deviceInfo);
-  await updateDoc(studentRef, { devices });
-  return { success: true };
 }
 
 export async function removeDevice(studentId: string, deviceId: string): Promise<void> {
@@ -889,14 +927,42 @@ export async function removeDevice(studentId: string, deviceId: string): Promise
 }
 
 export function getDeviceId(): string {
-  let deviceId = localStorage.getItem("a-plus-device-id");
-  if (!deviceId) {
-    try {
-      deviceId = crypto.randomUUID();
-    } catch {
-      deviceId = Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+  // Store the id in two independent locations (localStorage + sessionStorage)
+  // so clearing one alone doesn't silently mint a brand-new device slot.
+  // This raises the practical cost of bypassing the 2-device limit without
+  // requiring server-side enforcement.
+  const KEYS = ["a-plus-device-id", "a-plus-dev-id"];
+  const read = (): string => {
+    for (const k of KEYS) {
+      try {
+        const v = localStorage.getItem(k) || sessionStorage.getItem(k);
+        if (v) return v;
+      } catch {
+        // storage may be blocked — continue
+      }
     }
-    localStorage.setItem("a-plus-device-id", deviceId);
+    return "";
+  };
+
+  const existing = read();
+  if (existing) {
+    // Re-persist to both spots so a partial clear self-heals next load.
+    for (const k of KEYS) {
+      try { localStorage.setItem(k, existing); } catch { /* ignore */ }
+      try { sessionStorage.setItem(k, existing); } catch { /* ignore */ }
+    }
+    return existing;
+  }
+
+  let deviceId = "";
+  try {
+    deviceId = crypto.randomUUID();
+  } catch {
+    deviceId = Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+  }
+  for (const k of KEYS) {
+    try { localStorage.setItem(k, deviceId); } catch { /* ignore */ }
+    try { sessionStorage.setItem(k, deviceId); } catch { /* ignore */ }
   }
   return deviceId;
 }
@@ -1111,12 +1177,26 @@ export async function resetStats(): Promise<void> {
     }
   }
 
-  // Delete all stats docs collection group-style in batches
-  const all = await getDocs(collection(db, "stats"));
-  const docs = all.docs.map((d) => d);
-  for (let i = 0; i < docs.length; i += 500) {
+  // Paginate the read by document ID so we never pull the whole collection
+  // into memory at once (safe even for very large stats collections).
+  const pageSize = 500;
+  const statsCol = collection(db, "stats");
+  let lastDoc: DocumentSnapshot | null = null;
+  let remaining = true;
+
+  while (remaining) {
+    let q = query(statsCol, orderBy("__name__"), limit(pageSize));
+    if (lastDoc) {
+      q = query(statsCol, orderBy("__name__"), startAfter(lastDoc), limit(pageSize));
+    }
+    const snap = await getDocs(q);
+    if (snap.empty) break;
+
     const batch = writeBatch(db);
-    docs.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
+    snap.docs.forEach((d) => batch.delete(d.ref));
     await batch.commit();
+
+    lastDoc = snap.docs[snap.docs.length - 1];
+    if (snap.docs.length < pageSize) remaining = false;
   }
 }

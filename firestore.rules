@@ -1,25 +1,83 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Subjects - public read, admin only write
+    // Helper: is the signed-in Firebase user an admin (has a doc in admin/<uid>)?
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // ─── SUBJECTS ───────────────────────────────────────────────
+    // Public read (students need it to browse). Write: admin only.
     match /subjects/{subject} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
-    // Students - public read, allow writes for device registration (students auth via username/password, not Firebase)
+
+    // ─── STUDENTS ──────────────────────────────────────────────
+    // TEMPORARY (until Cloud Functions are deployed):
+    //   • read  kept open so student username/password login works in the browser
+    //   • write kept open ONLY for the student's own device registration
+    // After deploying the Functions + moving auth server-side, replace with:
+    //   allow read:  if isAdmin();
+    //   allow write: if isAdmin();
+    // WARNING: do NOT lock these before the Callable is live, or student
+    // login / device registration breaks.
     match /students/{student} {
-      allow read: if true;
+      allow read: if isAdmin() || request.auth == null;
+      allow write: if isAdmin() || request.auth == null;
+    }
+
+    // ─── ADMINS ────────────────────────────────────────────────
+    // Highly sensitive. Read/write admin only.
+    match /admins/{admin} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+// ─── STATS / SETTINGS / PROGRESS ───────────────────────────
+    // stats: reads are admin-only, but writes are kept open TEMPORARILY
+    // because plays / watch-time / visits are recorded from the visitor's
+    // browser. Once analytics writing moves server-side (Cloud Functions),
+    // restrict write to: allow write: if isAdmin();
+    match /stats/{doc} {
+      allow read: if isAdmin();
       allow write: if true;
     }
-    // Progress tracking - public read, admin only write
-    match /progress/{doc} {
-      allow read: if true;
-      allow write: if request.auth != null;
+    match /settings/{doc} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
     }
-    // All other collections (videos, files, assessments, admins...)
-    match /{document=**} {
+    match /progress/{doc} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ─── CONTENT (videos, files, assessments) ───────────────────
+    // Public read (students need it). Write: admin only.
+    match /videos/{id} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
+    }
+    match /files/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /assessments/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ─── COUNTERS (atomic order counters per subject) ──────────
+    // Read/write admin only.
+    match /counters/{key} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── FALLBACK (safety) ─────────────────────────────────────
+    // Any future collection: default DENY. Never world-writable.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import TickerBar from "@/components/TickerBar";
@@ -77,6 +77,7 @@ import {
   trackVideoWatchTime,
   reorderVideos,
   reorderFiles,
+  reorderAssessments,
   toggleVideoHidden,
   toggleFileHidden,
   toggleAssessmentHidden,
@@ -389,13 +390,31 @@ export default function SubjectPage() {
     setCompletedItems(updated);
   };
 
-  const byOrder = (a: Video, b: Video) => (a.order ?? 0) - (b.order ?? 0);
-  const visibleVideos = isAdmin ? videos : videos.filter((v) => !v.isHidden);
-  const theoryVideos = visibleVideos.filter((v) => v.type === "theory").sort(byOrder);
-  const reviewVideos = visibleVideos.filter((v) => v.type === "review").sort(byOrder);
-  const practicalVideos = visibleVideos.filter((v) => v.type === "practical").sort(byOrder);
-  const visibleFiles = isAdmin ? filesList : filesList.filter((f) => !f.isHidden);
-  const visibleAssessments = isAdmin ? assessments : assessments.filter((a) => !a.isHidden);
+  const byOrder = useCallback((a: Video, b: Video) => (a.order ?? 0) - (b.order ?? 0), []);
+  const visibleVideos = useMemo(
+    () => (isAdmin ? videos : videos.filter((v) => !v.isHidden)),
+    [isAdmin, videos]
+  );
+  const theoryVideos = useMemo(
+    () => visibleVideos.filter((v) => v.type === "theory").sort(byOrder),
+    [visibleVideos, byOrder]
+  );
+  const reviewVideos = useMemo(
+    () => visibleVideos.filter((v) => v.type === "review").sort(byOrder),
+    [visibleVideos, byOrder]
+  );
+  const practicalVideos = useMemo(
+    () => visibleVideos.filter((v) => v.type === "practical").sort(byOrder),
+    [visibleVideos, byOrder]
+  );
+  const visibleFiles = useMemo(
+    () => (isAdmin ? filesList : filesList.filter((f) => !f.isHidden)),
+    [isAdmin, filesList]
+  );
+  const visibleAssessments = useMemo(
+    () => (isAdmin ? assessments : assessments.filter((a) => !a.isHidden)),
+    [isAdmin, assessments]
+  );
 
   const openVideoDialog = (video?: Video, presetType?: "theory" | "review" | "practical") => {
     if (video) {
@@ -519,35 +538,66 @@ export default function SubjectPage() {
   };
 
   const handleDrop = async (
-    type: "video" | "file",
+    type: "video" | "file" | "assessment",
     overId: string,
-    currentList: Video[] | FileItem[]
+    currentList: Video[] | FileItem[] | Assessment[]
   ) => {
     if (!dragId || dragId === overId) { setDragId(null); return; }
-    const fromIndex = currentList.findIndex((i) => i.id === dragId);
-    const overIndex = currentList.findIndex((i) => i.id === overId);
+    const draggedItem = currentList.find((i) => i.id === dragId);
     setDragId(null);
-    if (fromIndex === -1 || overIndex === -1) return;
-    const reordered: (Video | FileItem)[] = [...currentList];
-    const [moved] = reordered.splice(fromIndex, 1);
-    reordered.splice(overIndex, 0, moved);
-    const orderedIds = reordered.map((i) => i.id);
-    try {
-      if (type === "video") {
-        setVideos((prev) => {
-          const others = prev.filter((v) => !orderedIds.includes(v.id));
-          return [...(reordered as Video[]), ...others];
-        });
-        await reorderVideos(orderedIds);
-      } else {
-        setFilesList(reordered as FileItem[]);
-        await reorderFiles(orderedIds);
-      }
-      toast.success("تم ترتيب المحتوى بنجاح");
-    } catch {
-      toast.error("فشل حفظ الترتيب، أعد المحاولة");
-      await loadData();
+    if (!draggedItem) return;
+
+    // Build the FULL sequence (visible + hidden) of the same subject+type so
+    // that hidden items keep their positions when the admin reorders visible ones.
+    let fullList: Video[] | FileItem[] | Assessment[];
+    if (type === "video") {
+      const videoType = (draggedItem as Video).type;
+      fullList = videos
+        .filter((v) => v.subjectId === id && v.type === videoType)
+        .sort(byOrder);
+    } else if (type === "file") {
+      fullList = filesList
+        .filter((f) => f.subjectId === id)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    } else {
+      fullList = assessments
+        .filter((a) => a.subjectId === id)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     }
+
+    const targetIdx = fullList.findIndex((i) => i.id === overId);
+    if (targetIdx === -1) return;
+    const withoutMoved = fullList.filter((i) => i.id !== dragId);
+    const insertAt = Math.min(targetIdx, withoutMoved.length);
+    withoutMoved.splice(insertAt, 0, draggedItem as never);
+    const orderedIds = withoutMoved.map((i) => i.id);
+
+    if (type === "video") {
+      setVideos((prev) =>
+        prev.map((v) => {
+          const pos = orderedIds.indexOf(v.id);
+          return pos === -1 ? v : { ...v, order: pos };
+        })
+      );
+      await reorderVideos(orderedIds);
+    } else if (type === "file") {
+      setFilesList((prev) =>
+        prev.map((f) => {
+          const pos = orderedIds.indexOf(f.id);
+          return pos === -1 ? f : { ...f, order: pos };
+        })
+      );
+      await reorderFiles(orderedIds);
+    } else {
+      setAssessments((prev) =>
+        prev.map((a) => {
+          const pos = orderedIds.indexOf(a.id);
+          return pos === -1 ? a : { ...a, order: pos };
+        })
+      );
+      await reorderAssessments(orderedIds);
+    }
+    toast.success("تم ترتيب المحتوى بنجاح");
   };
 
   const handleToggleFree = async (videoId: string, currentIsFree: boolean) => {
@@ -1110,20 +1160,27 @@ export default function SubjectPage() {
             {visibleAssessments.length > 0 ? (
               <div className="space-y-3">
                 {visibleAssessments.map((test) => (
-                  <AssessmentCard
+                  <div
                     key={test.id}
-                    assessment={test}
-                    isAdmin={isAdmin}
-                    onDelete={(id) => handleDeleteItem("assessment", id)}
-                    isCompleted={completedItems.includes(test.id)}
-                    onToggleComplete={handleToggleProgress}
-                    color={subject.color}
-                    hasSubjectAccess={hasSubjectAccess}
-                    onToggleFree={handleToggleAssessmentFree}
-                    isHidden={!!test.isHidden}
-                    onToggleHide={handleToggleAssessmentHidden}
-                    onOpenAccess={openAccessDialog}
-                  />
+                    draggable={isAdmin}
+                    onDragStart={() => handleDragStart(test.id)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => handleDrop("assessment", test.id, visibleAssessments)}
+                  >
+                    <AssessmentCard
+                      assessment={test}
+                      isAdmin={isAdmin}
+                      onDelete={(id) => handleDeleteItem("assessment", id)}
+                      isCompleted={completedItems.includes(test.id)}
+                      onToggleComplete={handleToggleProgress}
+                      color={subject.color}
+                      hasSubjectAccess={hasSubjectAccess}
+                      onToggleFree={handleToggleAssessmentFree}
+                      isHidden={!!test.isHidden}
+                      onToggleHide={handleToggleAssessmentHidden}
+                      onOpenAccess={openAccessDialog}
+                    />
+                  </div>
                 ))}
               </div>
             ) : (
@@ -1378,6 +1435,62 @@ function VideoCard({
 
   const canPlay = isAdmin || video.isFree || hasSubjectAccess;
 
+  // Ref to the native <video> element (kind === "file") so we can read
+  // currentTime/paused directly; unused for iframe players.
+  const videoElRef = useRef<HTMLVideoElement | null>(null);
+  const isPausedRef = useRef(false);
+
+  // Accumulate real watch time while the video is active.
+  // Only counts time while the tab is visible AND the media is actually
+  // playing (native <video> only — iframe players pause via their own UI).
+  useEffect(() => {
+    if (!isActive || !canPlay) return;
+    if (player.kind !== "youtube" && player.kind !== "bunny" && player.kind !== "vimeo" && player.kind !== "file") return;
+
+    if (player.kind === "file") {
+      const t = videoElRef.current;
+      isPausedRef.current = !!(t && t.paused);
+    }
+
+    let last = Date.now();
+    let pending = 0;
+
+    const fire = (elapsed: number) => {
+      if (pending + elapsed <= 0) return;
+      trackVideoWatchTime(video.id, Math.round(pending + elapsed));
+      pending = 0;
+    };
+
+    const tick = () => {
+      const now = Date.now();
+      const delta = (now - last) / 1000;
+      last = now;
+      if (document.hidden || isPausedRef.current) return;
+      pending += delta;
+      if (pending >= 10) fire(0);
+    };
+
+    const onVisible = () => {
+      last = Date.now();
+      if (!document.hidden) tick();
+    };
+
+    const interval = setInterval(tick, 5000);
+
+    document.addEventListener("visibilitychange", onVisible);
+    if (videoElRef.current) {
+      const v = videoElRef.current;
+      v.addEventListener("play", () => { isPausedRef.current = false; last = Date.now(); });
+      v.addEventListener("pause", () => { isPausedRef.current = true; fire(0); });
+    }
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      fire(0);
+    };
+  }, [isActive, canPlay, video.id, player.kind, video.url]);
+
   const handlePlayClick = () => {
     if (!canPlay) {
       onOpenAccess();
@@ -1396,21 +1509,6 @@ function VideoCard({
     }
     onPlay();
   };
-
-  // Accumulate real watch time while the video is active in the player.
-  useEffect(() => {
-    if (!isActive || !canPlay) return;
-    if (player.kind !== "youtube" && player.kind !== "bunny" && player.kind !== "vimeo" && player.kind !== "file") return;
-    const timer = setInterval(() => {
-      trackVideoWatchTime(video.id, 10);
-    }, 10_000);
-    return () => {
-      clearInterval(timer);
-      // flush a final small increment so short replays still count
-      trackVideoWatchTime(video.id, 1);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, canPlay, video.id]);
 
   const typeColor = video.color || ({ theory: "#3B82F6", review: "#22C55E", practical: "#F97316" }[video.type] || color);
 
@@ -1473,6 +1571,7 @@ function VideoCard({
           )}
           {player.kind === "file" && (
             <video
+              ref={videoElRef}
               className="h-full w-full"
               src={video.url}
               controls
