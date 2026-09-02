@@ -401,6 +401,60 @@ export async function toggleAssessmentFreeStatus(id: string, isFree: boolean): P
   await updateDoc(doc(db, "assessments", id), { isFree });
 }
 
+async function toggleHiddenLocal<T extends { id: string }>(key: string, id: string, isHidden: boolean): Promise<void> {
+  const items = getLocalItems<T>(key).map((i) => (i.id === id ? { ...i, isHidden } as T : i));
+  setLocalItems(key, items);
+}
+
+export async function toggleVideoHidden(id: string, isHidden: boolean): Promise<void> {
+  if (useLocalStorage) return toggleHiddenLocal<Video>("videos", id, isHidden);
+  await updateDoc(doc(db, "videos", id), { isHidden });
+}
+
+export async function toggleFileHidden(id: string, isHidden: boolean): Promise<void> {
+  if (useLocalStorage) return toggleHiddenLocal<FileItem>("files", id, isHidden);
+  await updateDoc(doc(db, "files", id), { isHidden });
+}
+
+export async function toggleAssessmentHidden(id: string, isHidden: boolean): Promise<void> {
+  if (useLocalStorage) return toggleHiddenLocal<Assessment>("assessments", id, isHidden);
+  await updateDoc(doc(db, "assessments", id), { isHidden });
+}
+
+// Subject hiding: when hiding, push to the bottom (visible always on top).
+export async function toggleSubjectHidden(id: string, isHidden: boolean): Promise<void> {
+  if (useLocalStorage) {
+    const items = getLocalItems<Subject>("subjects");
+    const maxOrder = items.reduce((m, s) => Math.max(m, s.order ?? 0), -1);
+    const next = items.map((s) =>
+      s.id === id ? { ...s, isHidden, order: isHidden ? maxOrder + 1 : 0 } as Subject : s
+    );
+    setLocalItems("subjects", next);
+    return;
+  }
+  const subjects = await getSubjects();
+  const maxOrder = subjects.reduce((m, s) => Math.max(m, s.order ?? 0), -1);
+  const order = isHidden ? maxOrder + 1 : 0;
+  await updateDoc(doc(db, "subjects", id), { isHidden, order });
+}
+
+// For admin view: hidden subjects pushed to the bottom, visible on top (by order).
+export function sortSubjectsForView(subjects: Subject[]): Subject[] {
+  return [...subjects].sort((a, b) => {
+    const ah = a.isHidden ? 1 : 0;
+    const bh = b.isHidden ? 1 : 0;
+    if (ah !== bh) return ah - bh;
+    return (a.order ?? 0) - (b.order ?? 0);
+  });
+}
+
+// For student-facing view: only visible subjects, ordered.
+export function getVisibleSubjects(subjects: Subject[]): Subject[] {
+  return subjects
+    .filter((s) => !s.isHidden)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
 // Files
 export async function getAllFiles(): Promise<FileItem[]> {
   if (useLocalStorage) {

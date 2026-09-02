@@ -37,6 +37,7 @@ import {
   CheckCircle2,
   Circle,
   Eye,
+  EyeOff,
   LayoutDashboard,
   Trash2,
   Lock,
@@ -76,6 +77,9 @@ import {
   trackVideoWatchTime,
   reorderVideos,
   reorderFiles,
+  toggleVideoHidden,
+  toggleFileHidden,
+  toggleAssessmentHidden,
 } from "@/services/firestore";
 import type { Subject, Video, FileItem, Assessment } from "@/types";
 
@@ -386,9 +390,12 @@ export default function SubjectPage() {
   };
 
   const byOrder = (a: Video, b: Video) => (a.order ?? 0) - (b.order ?? 0);
-  const theoryVideos = videos.filter((v) => v.type === "theory").sort(byOrder);
-  const reviewVideos = videos.filter((v) => v.type === "review").sort(byOrder);
-  const practicalVideos = videos.filter((v) => v.type === "practical").sort(byOrder);
+  const visibleVideos = isAdmin ? videos : videos.filter((v) => !v.isHidden);
+  const theoryVideos = visibleVideos.filter((v) => v.type === "theory").sort(byOrder);
+  const reviewVideos = visibleVideos.filter((v) => v.type === "review").sort(byOrder);
+  const practicalVideos = visibleVideos.filter((v) => v.type === "practical").sort(byOrder);
+  const visibleFiles = isAdmin ? filesList : filesList.filter((f) => !f.isHidden);
+  const visibleAssessments = isAdmin ? assessments : assessments.filter((a) => !a.isHidden);
 
   const openVideoDialog = (video?: Video, presetType?: "theory" | "review" | "practical") => {
     if (video) {
@@ -593,6 +600,36 @@ export default function SubjectPage() {
     }
   };
 
+  const handleToggleVideoHidden = async (videoId: string, current: boolean) => {
+    try {
+      await toggleVideoHidden(videoId, !current);
+      toast.success(!current ? "تم إخفاء الفيديو عن الطلاب" : "تم إظهار الفيديو للطلاب");
+      await loadData();
+    } catch {
+      toast.error("حدث خطأ أثناء تغيير الحالة");
+    }
+  };
+
+  const handleToggleFileHidden = async (fileId: string, current: boolean) => {
+    try {
+      await toggleFileHidden(fileId, !current);
+      toast.success(!current ? "تم إخفاء الملف عن الطلاب" : "تم إظهار الملف للطلاب");
+      await loadData();
+    } catch {
+      toast.error("حدث خطأ أثناء تغيير الحالة");
+    }
+  };
+
+  const handleToggleAssessmentHidden = async (assessmentId: string, current: boolean) => {
+    try {
+      await toggleAssessmentHidden(assessmentId, !current);
+      toast.success(!current ? "تم إخفاء الاختبار عن الطلاب" : "تم إظهار الاختبار للطلاب");
+      await loadData();
+    } catch {
+      toast.error("حدث خطأ أثناء تغيير الحالة");
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white">
@@ -604,7 +641,7 @@ export default function SubjectPage() {
     );
   }
 
-  if (!subject) {
+  if (!subject || (subject.isHidden && !isAdmin)) {
     return (
       <div className="min-h-screen bg-white">
         <Navbar />
@@ -799,6 +836,8 @@ export default function SubjectPage() {
                       onToggleFree={handleToggleFree}
                       onOpenAccess={openAccessDialog}
                       onEdit={openVideoDialog}
+                      isHidden={!!video.isHidden}
+                      onToggleHide={handleToggleVideoHidden}
                       onClose={() => setActiveVideo(null)}
                     />
                   </div>
@@ -848,6 +887,8 @@ export default function SubjectPage() {
                       onToggleFree={handleToggleFree}
                       onOpenAccess={openAccessDialog}
                       onEdit={openVideoDialog}
+                      isHidden={!!video.isHidden}
+                      onToggleHide={handleToggleVideoHidden}
                       onClose={() => setActiveVideo(null)}
                     />
                   </div>
@@ -929,9 +970,9 @@ export default function SubjectPage() {
                 </Dialog>
               )}
             </div>
-            {filesList.length > 0 ? (
+            {visibleFiles.length > 0 ? (
               <div className="space-y-3">
-                {filesList.map((file) => (
+                {visibleFiles.map((file) => (
                   <div
                     key={file.id}
                     draggable={isAdmin}
@@ -952,6 +993,8 @@ export default function SubjectPage() {
                       onToggleFree={handleToggleFileFree}
                       onToggleDownload={handleToggleFileDownload}
                       onToggleView={handleToggleFileView}
+                      isHidden={!!file.isHidden}
+                      onToggleHide={handleToggleFileHidden}
                       onOpenAccess={openAccessDialog}
                     />
                   </div>
@@ -1001,6 +1044,8 @@ export default function SubjectPage() {
                       onToggleFree={handleToggleFree}
                       onOpenAccess={openAccessDialog}
                       onEdit={openVideoDialog}
+                      isHidden={!!video.isHidden}
+                      onToggleHide={handleToggleVideoHidden}
                       onClose={() => setActiveVideo(null)}
                     />
                   </div>
@@ -1062,9 +1107,9 @@ export default function SubjectPage() {
                 </Dialog>
               )}
             </div>
-            {assessments.length > 0 ? (
+            {visibleAssessments.length > 0 ? (
               <div className="space-y-3">
-                {assessments.map((test) => (
+                {visibleAssessments.map((test) => (
                   <AssessmentCard
                     key={test.id}
                     assessment={test}
@@ -1075,6 +1120,8 @@ export default function SubjectPage() {
                     color={subject.color}
                     hasSubjectAccess={hasSubjectAccess}
                     onToggleFree={handleToggleAssessmentFree}
+                    isHidden={!!test.isHidden}
+                    onToggleHide={handleToggleAssessmentHidden}
                     onOpenAccess={openAccessDialog}
                   />
                 ))}
@@ -1307,6 +1354,8 @@ function VideoCard({
   onOpenAccess,
   onEdit,
   onClose,
+  isHidden,
+  onToggleHide,
 }: {
   video: Video;
   isActive: boolean;
@@ -1321,6 +1370,8 @@ function VideoCard({
   onOpenAccess: () => void;
   onEdit?: (video: Video) => void;
   onClose?: () => void;
+  isHidden?: boolean;
+  onToggleHide?: (videoId: string, current: boolean) => void;
 }) {
   const player = resolveVideoPlayer(video.url);
   const isTelegram = video.sourceType === "telegram" || /^https?:\/\/(?:www\.)?(?:t\.me|telegram\.me)\//i.test(video.url);
@@ -1477,7 +1528,7 @@ function VideoCard({
 
   return (
     <Card
-      className={`group cursor-pointer overflow-hidden transition-all duration-300 hover:shadow-xl card-3d ${!canPlay ? 'opacity-80' : ''} glass`}
+      className={`group cursor-pointer overflow-hidden transition-all duration-300 hover:shadow-xl card-3d ${!canPlay ? 'opacity-80' : ''} ${isHidden ? 'opacity-45 saturate-50' : ''} glass`}
       onClick={handlePlayClick}
       style={{ borderColor: color + '30', borderLeft: `1.5cm solid ${typeColor}` }}
     >
@@ -1552,6 +1603,18 @@ function VideoCard({
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className={isHidden ? "text-amber-600 hover:text-amber-600 p-1.5 h-auto" : "text-muted-foreground hover:text-amber-600 p-1.5 h-auto"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleHide?.(video.id, !!isHidden);
+                    }}
+                    title={isHidden ? 'إظهار الفيديو للطلاب' : 'إخفاء الفيديو عن الطلاب'}
+                  >
+                    {isHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -1596,6 +1659,8 @@ function FileCard({
   onToggleDownload,
   onToggleView,
   onOpenAccess,
+  isHidden,
+  onToggleHide,
 }: {
   file: FileItem;
   onPreview: (file: FileItem) => void;
@@ -1609,11 +1674,13 @@ function FileCard({
   onToggleDownload: (fileId: string, current: boolean) => void;
   onToggleView: (fileId: string, current: boolean) => void;
   onOpenAccess: () => void;
+  isHidden?: boolean;
+  onToggleHide?: (fileId: string, current: boolean) => void;
 }) {
   const canAccess = isAdmin || file.isFree || hasSubjectAccess;
 
   return (
-    <Card className={`hover:border-primary/50 transition-all group ${!canAccess ? 'opacity-80' : ''}`}>
+    <Card className={`hover:border-primary/50 transition-all group ${!canAccess ? 'opacity-80' : ''} ${isHidden ? 'opacity-45 saturate-50' : ''}`}>
       <CardContent className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4">
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <button
@@ -1712,6 +1779,15 @@ function FileCard({
               >
                 <Eye className="h-4 w-4" />
               </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className={`p-2 h-auto ${isHidden ? 'text-amber-600' : 'text-muted-foreground hover:text-amber-600'}`}
+                onClick={() => onToggleHide?.(file.id, !!isHidden)}
+                title={isHidden ? 'إظهار الملف للطلاب' : 'إخفاء الملف عن الطلاب'}
+              >
+                {isHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
               <Button size="sm" variant="destructive" onClick={() => onDelete(file.id)}>
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -1733,6 +1809,8 @@ function AssessmentCard({
   hasSubjectAccess,
   onToggleFree,
   onOpenAccess,
+  isHidden,
+  onToggleHide,
 }: {
   assessment: Assessment;
   onDelete: (id: string) => void;
@@ -1743,11 +1821,13 @@ function AssessmentCard({
   hasSubjectAccess: boolean;
   onToggleFree: (assessmentId: string, currentIsFree: boolean) => void;
   onOpenAccess: () => void;
+  isHidden?: boolean;
+  onToggleHide?: (assessmentId: string, current: boolean) => void;
 }) {
   const canAccess = isAdmin || assessment.isFree || hasSubjectAccess;
 
   return (
-    <Card className={`hover:border-primary/50 transition-all ${!canAccess ? 'opacity-80' : ''}`}>
+    <Card className={`hover:border-primary/50 transition-all ${!canAccess ? 'opacity-80' : ''} ${isHidden ? 'opacity-45 saturate-50' : ''}`}>
       <CardContent className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4">
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <button
@@ -1807,6 +1887,15 @@ function AssessmentCard({
                 title={assessment.isFree ? 'تحويل للمشتركين فقط' : 'تحويل لمجاني'}
               >
                 {assessment.isFree ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className={`p-2 h-auto ${isHidden ? 'text-amber-600' : 'text-muted-foreground hover:text-amber-600'}`}
+                onClick={() => onToggleHide?.(assessment.id, !!isHidden)}
+                title={isHidden ? 'إظهار الاختبار للطلاب' : 'إخفاء الاختبار عن الطلاب'}
+              >
+                {isHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </Button>
               <Button size="sm" variant="destructive" onClick={() => onDelete(assessment.id)}>
                 <Trash2 className="h-4 w-4" />

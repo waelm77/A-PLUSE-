@@ -43,6 +43,7 @@ import {
   Search,
   BarChart3,
   Eye,
+  EyeOff,
   Flame,
   Timer,
   TrendingUp,
@@ -65,6 +66,8 @@ import {
   getAdmins,
   getStats,
   resetStats,
+  toggleSubjectHidden,
+  sortSubjectsForView,
 } from "@/services/firestore";
 import { AVAILABLE_ICONS, COLORS } from "@/lib/constants";
 import type { Subject, Student, Ticker, Admin, StatsData } from "@/types";
@@ -237,7 +240,7 @@ export default function AdminPage() {
   const loadSubjects = async () => {
     try {
       const subjectsData = await getSubjects();
-      setSubjects(subjectsData);
+      setSubjects(sortSubjectsForView(subjectsData));
     } catch {
       toast.error("حدث خطأ في تحميل البيانات");
     } finally {
@@ -382,6 +385,18 @@ export default function AdminPage() {
       await loadSubjects();
     } catch {
       toast.error("حدث خطأ أثناء الحذف");
+    }
+  };
+
+  const handleToggleSubjectHidden = async (subject: Subject) => {
+    const target = !subject.isHidden;
+    if (target && !confirm("سيتم إخفاء هذه المادة عن الطلاب ونقلها إلى أسفل القائمة. متابعة؟")) return;
+    try {
+      await toggleSubjectHidden(subject.id, target);
+      toast.success(target ? "تم إخفاء المادة عن الطلاب" : "تم إظهار المادة للطلاب");
+      await loadSubjects();
+    } catch {
+      toast.error("حدث خطأ أثناء تغيير الحالة");
     }
   };
 
@@ -904,7 +919,7 @@ export default function AdminPage() {
                           const Icon =
                             AVAILABLE_ICONS.find((i) => i.name === subject.icon)?.icon || BookOpen;
                           return (
-                            <TableRow key={subject.id}>
+                            <TableRow key={subject.id} className={subject.isHidden ? "opacity-50 saturate-50" : ""}>
                               <TableCell>
                                 <div className="flex items-center gap-3">
                                   <div
@@ -913,7 +928,12 @@ export default function AdminPage() {
                                   >
                                     <Icon className="h-4 w-4 text-white" />
                                   </div>
-                                  <span className="font-medium">{subject.name}</span>
+                                  <span className="font-medium">
+                                    {subject.name}
+                                    {subject.isHidden && (
+                                      <span className="mr-2 rounded bg-amber-500/90 px-1.5 py-0.5 text-[10px] text-white font-bold align-middle">مخفية</span>
+                                    )}
+                                  </span>
                                 </div>
                               </TableCell>
                               <TableCell className="text-muted-foreground max-w-xs truncate hidden sm:table-cell">
@@ -933,6 +953,15 @@ export default function AdminPage() {
                                     onClick={() => openSubjectDialog(subject)}
                                   >
                                     <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className={subject.isHidden ? "text-amber-600" : "text-muted-foreground"}
+                                    onClick={() => handleToggleSubjectHidden(subject)}
+                                    title={subject.isHidden ? 'إظهار المادة للطلاب' : 'إخفاء المادة عن الطلاب'}
+                                  >
+                                    {subject.isHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                   </Button>
                                   <Button
                                     size="sm"

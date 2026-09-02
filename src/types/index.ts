@@ -6,6 +6,7 @@ export interface Subject {
   icon: string;
   code: string;
   createdAt: string;
+  order?: number;
   tickerText?: string;
   tickerColor?: string;
   tickerBgColor?: string;
@@ -15,6 +16,7 @@ export interface Subject {
   countdownActive?: boolean;
   countdownTitle?: string;
   countdownEndDate?: string;
+  isHidden?: boolean;
 }
 
 export interface Video {
@@ -30,6 +32,7 @@ export interface Video {
   createdAt: string;
   order?: number;
   isFree?: boolean;
+  isHidden?: boolean;
 }
 
 export interface FileItem {
@@ -45,6 +48,7 @@ export interface FileItem {
   canView?: boolean;
   createdAt: string;
   order?: number;
+  isHidden?: boolean;
 }
 
 export interface Assessment {
@@ -55,6 +59,7 @@ export interface Assessment {
   isFree: boolean;
   createdAt: string;
   order?: number;
+  isHidden?: boolean;
 }
 
 export interface UserProgress {

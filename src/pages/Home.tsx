@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, MessageCircle, Send } from "lucide-react";
 import toast from "react-hot-toast";
-import { getSubjects, createSubject, trackVisit, getDeviceId } from "@/services/firestore";
+import { getSubjects, createSubject, trackVisit, getDeviceId, getVisibleSubjects } from "@/services/firestore";
 import { AVAILABLE_ICONS, COLORS } from "@/lib/constants";
 import type { Subject } from "@/types";
 
@@ -42,7 +42,7 @@ export default function Home() {
   const loadSubjects = async () => {
     try {
       const data = await getSubjects();
-      setSubjects(data);
+      setSubjects(getVisibleSubjects(data));
     } catch {
       toast.error("حدث خطأ في تحميل المواد");
     } finally {
