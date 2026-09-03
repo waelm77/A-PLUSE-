@@ -215,6 +215,100 @@ export function subscribeSubjects(
   return unsub;
 }
 
+/**
+ * Live subscription to a subject's videos. Delivers immediately on connect
+ * (faster than a one-shot getDocs) and keeps updating as items change.
+ */
+export function subscribeVideosBySubject(
+  subjectId: string,
+  onData: (items: Video[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  if (useLocalStorage) {
+    onData(getLocalItems<Video>("videos").filter((v) => v.subjectId === subjectId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+    return () => {};
+  }
+  const q = query(collection(db, "videos"), where("subjectId", "==", subjectId));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      onData(
+        snapshot.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            ...data,
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          } as Video;
+        }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      );
+    },
+    (err) => onError?.(err)
+  );
+}
+
+/**
+ * Live subscription to a subject's files.
+ */
+export function subscribeFilesBySubject(
+  subjectId: string,
+  onData: (items: FileItem[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  if (useLocalStorage) {
+    onData(getLocalItems<FileItem>("files").filter((f) => f.subjectId === subjectId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+    return () => {};
+  }
+  const q = query(collection(db, "files"), where("subjectId", "==", subjectId));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      onData(
+        snapshot.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            ...data,
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          } as FileItem;
+        }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      );
+    },
+    (err) => onError?.(err)
+  );
+}
+
+/**
+ * Live subscription to a subject's assessments/tests.
+ */
+export function subscribeAssessmentsBySubject(
+  subjectId: string,
+  onData: (items: Assessment[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  if (useLocalStorage) {
+    onData(getLocalItems<Assessment>("assessments").filter((a) => a.subjectId === subjectId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+    return () => {};
+  }
+  const q = query(collection(db, "assessments"), where("subjectId", "==", subjectId));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      onData(
+        snapshot.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            ...data,
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          } as Assessment;
+        }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      );
+    },
+    (err) => onError?.(err)
+  );
+}
+
 export async function getSubjectById(id: string): Promise<Subject | null> {
   if (useLocalStorage) {
     const items = getLocalItems<Subject>("subjects");

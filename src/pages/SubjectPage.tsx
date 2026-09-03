@@ -51,9 +51,9 @@ import { useAuthStore } from "@/store/authStore";
 import toast from "react-hot-toast";
 import {
   getSubjectById,
-  getVideosBySubject,
-  getFilesBySubject,
-  getAssessmentsBySubject,
+  subscribeVideosBySubject,
+  subscribeFilesBySubject,
+  subscribeAssessmentsBySubject,
   createVideo,
   updateVideo,
   createFile,
@@ -311,20 +311,18 @@ export default function SubjectPage() {
   });
 
   const loadData = async () => {
-    if (!id) return;
+    if (!id) return () => {};
     setLoading(true);
+    // Video/file/assessment lists load live (instant first paint + auto-update).
+    const unsubs = [
+      subscribeVideosBySubject(id, setVideos, () => toast.error("حدث خطأ في تحميل الفيديوهات")),
+      subscribeFilesBySubject(id, setFilesList, () => toast.error("حدث خطأ في تحميل الملفات")),
+      subscribeAssessmentsBySubject(id, setAssessments, () => toast.error("حدث خطأ في تحميل الاختبارات")),
+    ];
     try {
-      const [sub, vids, files, tests] = await Promise.all([
-        getSubjectById(id),
-        getVideosBySubject(id),
-        getFilesBySubject(id),
-        getAssessmentsBySubject(id),
-      ]);
+      const sub = await getSubjectById(id);
       setSubject(sub);
-      setVideos(vids);
-      setFilesList(files);
-      setAssessments(tests);
-      if (user) {
+      if (user && sub) {
         setCompletedItems(getLocalProgress(user.uid));
       }
       if (studentSession && id && studentSession.enrolledSubjects.includes(id)) {
@@ -336,13 +334,17 @@ export default function SubjectPage() {
     } finally {
       setLoading(false);
     }
+    return () => unsubs.forEach((u) => u());
   };
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
-    if (id) loadData();
+    const cleanupPromise = loadData();
     trackVisit(getDeviceId());
     /* eslint-enable react-hooks/set-state-in-effect */
+    return () => {
+      cleanupPromise?.then((cleanup) => cleanup?.());
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
