@@ -1529,16 +1529,20 @@ function VideoCard({
       trackVideoPlay(video);
     }
     // Private Telegram channels / external sources can't be embedded — jump
-    // straight to the app on this click (direct user gesture avoids popup
-    // blockers; mobile opens the Telegram app directly via a deep link).
-    if (player.kind === "telegramPrivate") {
-      window.open(telegramDeepLink(video.url), "_blank", "noopener,noreferrer");
-      toast.success("تم فتح الفيديو في تطبيق تليجرام");
-      return;
-    }
-    if (player.kind === "external") {
-      window.open(video.url, "_blank", "noopener,noreferrer");
-      toast.success("تم فتح الفيديو في تطبيقه");
+    // straight to the app on this click. We navigate via a real <a> element so
+    // the mobile browser treats it as a trusted user gesture and hands the
+    // tg:// deep link to the Telegram app (window.open is often blocked for
+    // external schemes on mobile). No noopener — it can block scheme handlers.
+    if (player.kind === "telegramPrivate" || player.kind === "external") {
+      const target = player.kind === "telegramPrivate" ? telegramDeepLink(video.url) : video.url;
+      const a = document.createElement("a");
+      a.href = target;
+      a.setAttribute("target", "_blank");
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast.success(player.kind === "telegramPrivate" ? "تم فتح الفيديو في تطبيق تليجرام" : "تم فتح الفيديو في تطبيقه");
       return;
     }
     onPlay();
