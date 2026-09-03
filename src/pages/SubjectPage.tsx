@@ -226,7 +226,6 @@ export default function SubjectPage() {
   const [accessPassword, setAccessPassword] = useState("");
   const [accessSubmitting, setAccessSubmitting] = useState(false);
   const [accessError, setAccessError] = useState("");
-  const [pendingVideoId, setPendingVideoId] = useState<string | null>(null);
 
   const [videoOpen, setVideoOpen] = useState(false);
   const [editingVideo, setEditingVideo] = useState<Video | null>(null);
@@ -319,13 +318,10 @@ export default function SubjectPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const openAccessDialog = (videoId?: string) => {
+  const openAccessDialog = () => {
     setAccessUsername("");
     setAccessPassword("");
     setAccessError("");
-    // Remember which locked video the user tried to open so it auto-plays
-    // right after a successful login (no second click needed).
-    setPendingVideoId(videoId ?? null);
     setAccessDialogOpen(true);
   };
 
@@ -371,14 +367,6 @@ export default function SubjectPage() {
       toast.success(`مرحباً ${result.student.displayName}!`);
       setHasSubjectAccess(true);
       setAccessDialogOpen(false);
-
-      // If the user clicked a locked video before logging in, play it now —
-      // so a single click shows the video right away.
-      if (pendingVideoId) {
-        const target = pendingVideoId;
-        setPendingVideoId(null);
-        setActiveVideo(target);
-      }
     } catch (e) {
       console.error("Login error:", e);
       setAccessError("حدث خطأ أثناء تسجيل الدخول");
@@ -763,7 +751,7 @@ export default function SubjectPage() {
                 </p>
                 <Button
                   variant="secondary"
-                  onClick={() => openAccessDialog()}
+                  onClick={openAccessDialog}
                   className="gap-2"
                 >
                   <LogIn className="h-4 w-4" />
@@ -1436,7 +1424,7 @@ function VideoCard({
   color: string;
   hasSubjectAccess: boolean;
   onToggleFree: (videoId: string, currentIsFree: boolean) => void;
-  onOpenAccess: (videoId?: string) => void;
+  onOpenAccess: () => void;
   onEdit?: (video: Video) => void;
   onClose?: () => void;
   isHidden?: boolean;
@@ -1505,7 +1493,7 @@ function VideoCard({
 
   const handlePlayClick = () => {
     if (!canPlay) {
-      onOpenAccess(video.id);
+      onOpenAccess();
       return;
     }
     // Count the play (embeddable sources) for analytics
