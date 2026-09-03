@@ -39,10 +39,29 @@ export default function Home() {
     icon: "BookOpen",
   });
 
+  // Show cached subjects immediately so the grid paints without empty boxes,
+  // then refresh from Firestore in the background (request count unchanged).
   const loadSubjects = async () => {
     try {
+      const cached = localStorage.getItem("a-plus-subjects");
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached) as Subject[];
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setLoading(false);
+            setSubjects(getVisibleSubjects(parsed));
+          }
+        } catch {
+          /* corrupt cache, ignore */
+        }
+      }
       const data = await getSubjects();
       setSubjects(getVisibleSubjects(data));
+      try {
+        localStorage.setItem("a-plus-subjects", JSON.stringify(data));
+      } catch {
+        /* storage full/unavailable, ignore */
+      }
     } catch {
       toast.error("حدث خطأ في تحميل المواد");
     } finally {
