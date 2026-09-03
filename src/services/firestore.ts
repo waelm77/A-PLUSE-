@@ -16,6 +16,7 @@ import {
   limit,
   orderBy,
   startAfter,
+  onSnapshot,
 } from "firebase/firestore";
 import type { DocumentSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
@@ -178,6 +179,40 @@ export async function getSubjects(): Promise<Subject[]> {
       } as Subject;
     })
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+}
+
+/**
+ * Live subscription to the subjects collection. Delivers the current data
+ * immediately on connect (much faster perceived first paint than a one-shot
+ * getDocs) and keeps updating as documents change. Returns an unsubscribe.
+ */
+export function subscribeSubjects(
+  onData: (items: Subject[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  const isLocal = useLocalStorage;
+  if (isLocal) {
+    onData(getLocalItems<Subject>("subjects"));
+    return () => {};
+  }
+  const unsub = onSnapshot(
+    collection(db, "subjects"),
+    (snapshot) => {
+      const items = snapshot.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+        } as Subject;
+      });
+      onData(items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
+    },
+    (err) => {
+      onError?.(err);
+    }
+  );
+  return unsub;
 }
 
 export async function getSubjectById(id: string): Promise<Subject | null> {

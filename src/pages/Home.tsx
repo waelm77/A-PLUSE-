@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, MessageCircle, Send } from "lucide-react";
 import toast from "react-hot-toast";
-import { getSubjects, createSubject, trackVisit, getDeviceId, getVisibleSubjects } from "@/services/firestore";
+import { subscribeSubjects, createSubject, trackVisit, getDeviceId, getVisibleSubjects } from "@/services/firestore";
 import { AVAILABLE_ICONS, COLORS } from "@/lib/constants";
 import type { Subject } from "@/types";
 
@@ -39,8 +39,19 @@ export default function Home() {
     icon: "BookOpen",
   });
 
-  // Show cached subjects immediately so the grid paints without empty boxes,
-  // then refresh from Firestore in the background (request count unchanged).
+  // Live subscribe to subjects: paints as soon as Firestore delivers, keeps
+  // updating automatically, then caches for instant repeat-visit rendering.
+  // First-time load falls back to any locally cached subjects for instant paint.
+  const applySubjects = (data: Subject[]) => {
+    setLoading(false);
+    setSubjects(getVisibleSubjects(data));
+    try {
+      localStorage.setItem("a-plus-subjects", JSON.stringify(data));
+    } catch {
+      /* storage full/unavailable, ignore */
+    }
+  };
+
   const loadSubjects = async () => {
     try {
       const cached = localStorage.getItem("a-plus-subjects");
@@ -55,25 +66,28 @@ export default function Home() {
           /* corrupt cache, ignore */
         }
       }
-      const data = await getSubjects();
-      setSubjects(getVisibleSubjects(data));
-      try {
-        localStorage.setItem("a-plus-subjects", JSON.stringify(data));
-      } catch {
-        /* storage full/unavailable, ignore */
-      }
+      const unsub = await Promise.resolve(
+        subscribeSubjects(applySubjects, () => {
+          toast.error("حدث خطأ في تحميل المواد");
+        })
+      );
+      // Subscribe fires immediately with current data, so loading ends soon after.
+      return () => unsub();
     } catch {
       toast.error("حدث خطأ في تحميل المواد");
-    } finally {
       setLoading(false);
+      return () => {};
     }
   };
 
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
-    loadSubjects();
-    /* eslint-enable react-hooks/set-state-in-effect */
+    const cleanupPromise = loadSubjects();
+    return () => {
+      cleanupPromise?.then((cleanup) => cleanup?.());
+    };
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
