@@ -112,6 +112,34 @@ import type { Subject, Video, FileItem, Assessment } from "@/types";
    * - vimeo: iframe embed
    * - external: platforms that forbid embedding -> open-externally panel
    */
+  /**
+   * On mobile, converts a t.me/telegram.me link into a tg:// deep link so the
+   * Telegram app opens directly (no browser interstitial asking to open the app).
+   * On desktop (or when the form can't be mapped) returns the original URL.
+   */
+  function telegramDeepLink(url: string): string {
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (!isMobile) return url;
+    const m = url.match(/^https?:\/\/(?:www\.)?(?:t\.me|telegram\.me)\/([^?#]+)/i);
+    if (!m) return url;
+    const path = m[1];
+    if (/(?:^|\/)c\//i.test(path)) {
+      const parts = path.split("/").filter(Boolean); // ["c", <internalId>, <postId>]
+      if (parts[0] === "c") {
+        const [, internalId, postId] = parts;
+        if (internalId && postId) return `tg://privatepost?channel=${internalId}&post=${postId}`;
+      }
+      return url;
+    }
+    if (path.startsWith("+")) return `tg://join?invite=${path.slice(1)}`;
+    if (path.startsWith("joinchat/")) return `tg://join?invite=${path.slice("joinchat/".length)}`;
+    const slash = path.indexOf("/");
+    const domain = slash === -1 ? path : path.slice(0, slash);
+    const post = slash === -1 ? "" : path.slice(slash + 1);
+    if (!post) return `tg://resolve?domain=${domain}`;
+    return `tg://resolve?domain=${domain}&post=${post}`;
+  }
+
   function resolveVideoPlayer(url: string): { kind: PlayerKind; src?: string } {
     if (!url) return { kind: "external" };
 
@@ -1500,9 +1528,15 @@ function VideoCard({
     if (!player.kind.startsWith("telegramPrivate") && player.kind !== "external") {
       trackVideoPlay(video);
     }
-    // Private Telegram channels can't be embedded — jump straight to the
-    // app on this click (direct user gesture avoids popup blockers)
-    if (player.kind === "telegramPrivate" || player.kind === "external") {
+    // Private Telegram channels / external sources can't be embedded — jump
+    // straight to the app on this click (direct user gesture avoids popup
+    // blockers; mobile opens the Telegram app directly via a deep link).
+    if (player.kind === "telegramPrivate") {
+      window.open(telegramDeepLink(video.url), "_blank", "noopener,noreferrer");
+      toast.success("تم فتح الفيديو في تطبيق تليجرام");
+      return;
+    }
+    if (player.kind === "external") {
       window.open(video.url, "_blank", "noopener,noreferrer");
       toast.success("تم فتح الفيديو في تطبيقه");
       return;
@@ -1541,7 +1575,7 @@ function VideoCard({
                 loading="lazy"
               />
               <a
-                href={video.url}
+                href={telegramDeepLink(video.url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="absolute bottom-2 left-2 z-10 flex items-center gap-1 rounded-full bg-black/70 px-2.5 py-1 text-[11px] text-white hover:bg-black/90"
@@ -1597,7 +1631,7 @@ function VideoCard({
                 </>
               )}
               <Button asChild variant="secondary" size="sm">
-                <a href={video.url} target="_blank" rel="noopener noreferrer">
+                <a href={player.kind === "telegramPrivate" ? telegramDeepLink(video.url) : video.url} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="h-4 w-4 ml-1" />
                   فتح الفيديو
                 </a>
