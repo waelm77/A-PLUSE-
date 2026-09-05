@@ -1383,7 +1383,6 @@ export default function SubjectPage() {
               </Label>
               <Input
                 id="access-password"
-                type="password"
                 value={accessPassword}
                 onChange={(e) => setAccessPassword(e.target.value)}
                 placeholder="أدخل كلمة السر"
