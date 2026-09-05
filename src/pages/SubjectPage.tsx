@@ -46,6 +46,7 @@ import {
   User,
   Key,
   LogIn,
+  Send,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import toast from "react-hot-toast";
@@ -138,6 +139,10 @@ import type { Subject, Video, FileItem, Assessment } from "@/types";
     const post = slash === -1 ? "" : path.slice(slash + 1);
     if (!post) return `tg://resolve?domain=${domain}`;
     return `tg://resolve?domain=${domain}&post=${post}`;
+  }
+
+  function isTelegramUrl(url: string): boolean {
+    return /^https?:\/\/(?:www\.)?(?:t\.me|telegram\.me)\//i.test(url);
   }
 
   function resolveVideoPlayer(url: string): { kind: PlayerKind; src?: string } {
@@ -1865,7 +1870,19 @@ function FileCard({
             </div>
           )}
           {canAccess ? (
-            <>
+            isTelegramUrl(file.downloadUrl) ? (
+              <Button
+                size="sm"
+                asChild
+                className="gap-1 bg-[#29A9EB] text-white hover:bg-[#1f8fc7]"
+              >
+                <a href={telegramDeepLink(file.downloadUrl)} target="_blank" rel="noopener noreferrer">
+                  <Send className="h-4 w-4" />
+                  <span className="hidden sm:inline">فتح في تليجرام</span>
+                </a>
+              </Button>
+            ) : (
+              <>
               <Button size="sm" variant="ghost" onClick={() => onPreview(file)} className="gap-1">
                 <Eye className="h-4 w-4" />
                 <span className="hidden sm:inline">معاينة</span>
@@ -1882,7 +1899,8 @@ function FileCard({
                   </a>
                 </Button>
               )}
-            </>
+              </>
+            )
           ) : (
             <Button size="sm" variant="secondary" onClick={onOpenAccess} className="gap-1">
               <Lock className="h-4 w-4" />
