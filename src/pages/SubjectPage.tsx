@@ -141,6 +141,10 @@ import type { Subject, Video, FileItem, Assessment } from "@/types";
     return `tg://resolve?domain=${domain}&post=${post}`;
   }
 
+  function formatSecret(code: string): string {
+    return code.replace(/\D/g, "").match(/.{1,3}/g)?.join(" ") ?? "";
+  }
+
   function isTelegramUrl(url: string): boolean {
     return /^https?:\/\/(?:www\.)?(?:t\.me|telegram\.me)\//i.test(url);
   }
@@ -1383,9 +1387,13 @@ export default function SubjectPage() {
               </Label>
               <Input
                 id="access-password"
-                value={accessPassword}
-                onChange={(e) => setAccessPassword(e.target.value)}
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
+                value={formatSecret(accessPassword)}
+                onChange={(e) => setAccessPassword(e.target.value.replace(/\D/g, "").slice(0, 15))}
                 placeholder="أدخل كلمة السر"
+                className="font-mono tracking-wider text-center"
                 required
               />
             </div>

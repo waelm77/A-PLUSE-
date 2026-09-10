@@ -440,14 +440,18 @@ export default function AdminPage() {
       .join(", ");
     const formattedPassword = passwordAutoFormat
       ? isolateLtr(formatSecret(form.password))
-      : form.password;
+      : isolateLtr(form.password);
     return [
       "منصه A+",
       "https://a-pluse.vercel.app/",
       "",
       `اسم المستخدم: ${form.username}`,
-      `كلمة السر: ${formattedPassword}`,
+      "",
+      "كلمة السر:",
+      formattedPassword,
+      "",
       `اسم الطالب: ${form.displayName}`,
+      "",
       `المادة: ${subjectNames || "—"}`,
     ].join("\n");
   };
