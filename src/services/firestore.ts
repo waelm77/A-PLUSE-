@@ -946,7 +946,7 @@ export async function verifyStudentCredentials(
   if (!student.isActive) {
     return { valid: false, student: null, error: "هذا الحساب غير نشط، يرجى التواصل مع الأدمن" };
   }
-  if (student.password !== password) {
+  if (student.password !== password.replace(/\s+/g, "")) {
     return { valid: false, student: null, error: "كلمة السر غير صحيحة" };
   }
   if (!student.enrolledSubjects.includes(subjectId)) {

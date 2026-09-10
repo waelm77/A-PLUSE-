@@ -47,6 +47,8 @@ import {
   Flame,
   Timer,
   TrendingUp,
+  Copy,
+  Sparkles,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useTrialStore } from "@/store/trialStore";
@@ -401,6 +403,64 @@ export default function AdminPage() {
   };
 
   // ─── Student handlers ──
+  const generateSecretCode = () => {
+    let code = "";
+    for (let i = 0; i < 6; i++) {
+      code += Math.floor(Math.random() * 10).toString();
+    }
+    return code;
+  };
+
+  const formatSecret = (code: string) => {
+    const digits = code.replace(/\D/g, "").slice(0, 6);
+    if (digits.length <= 3) return digits;
+    return `${digits.slice(0, 3)} ${digits.slice(3)}`;
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    toast.success("تم نسخ بيانات الطالب");
+  };
+
+  const buildStudentMessage = (form: typeof studentForm) => {
+    const subjectNames = form.enrolledSubjects
+      .map((id) => subjects.find((s) => s.id === id)?.name)
+      .filter(Boolean)
+      .join(", ");
+    return [
+      "منصه A+",
+      "https://a-pluse.vercel.app/",
+      "",
+      `اسم المستخدم: ${form.username}`,
+      `كلمة السر: ${formatSecret(form.password)}`,
+      `اسم الطالب: ${form.displayName}`,
+      `المادة: ${subjectNames || "—"}`,
+    ].join("\n");
+  };
+
+  // Auto-fill the same secret code when a student with the same name exists.
+  const applyExistingStudentPassword = (displayName: string) => {
+    if (editingStudent || !displayName.trim()) return;
+    const match = students.find(
+      (s) => s.displayName.trim().toLowerCase() === displayName.trim().toLowerCase()
+    );
+    if (match) {
+      setStudentForm((prev) => ({ ...prev, password: match.password }));
+      toast(`طالب موجود بنفس الاسم — تم استخدام رقمه السري: ${formatSecret(match.password)}`);
+    }
+  };
+
   const openAddStudent = () => {
     setEditingStudent(null);
     setStudentForm({ username: "", password: "", displayName: "", enrolledSubjects: [] });
@@ -421,7 +481,8 @@ export default function AdminPage() {
   const handleStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!studentForm.username.trim() || !studentForm.displayName.trim()) return;
-    if (!editingStudent && !studentForm.password.trim()) {
+    const cleanPassword = studentForm.password.replace(/\s+/g, "");
+    if (!editingStudent && !cleanPassword) {
       toast.error("يرجى إدخال كلمة السر");
       return;
     }
@@ -432,18 +493,18 @@ export default function AdminPage() {
           displayName: studentForm.displayName,
           enrolledSubjects: studentForm.enrolledSubjects,
         };
-        if (studentForm.password.trim()) {
-          updates.password = studentForm.password;
+        if (cleanPassword) {
+          updates.password = cleanPassword;
         }
         await updateStudent(editingStudent.id, updates);
         toast.success("تم تعديل الطالب بنجاح");
       } else {
-        if (!studentForm.password.trim()) {
+        if (!cleanPassword) {
           toast.error("يرجى إدخال كلمة السر");
           setStudentSubmitting(false);
           return;
         }
-        await createStudent(studentForm);
+        await createStudent({ ...studentForm, password: cleanPassword });
         toast.success("تم إضافة الطالب بنجاح");
       }
       setStudentDialogOpen(false);
@@ -1679,14 +1740,37 @@ export default function AdminPage() {
               <Label htmlFor="s-password">
                 {editingStudent ? "كلمة السر (اترك فارغًا إن لم ترد التغيير)" : "كلمة السر"}
               </Label>
-              <Input
-                id="s-password"
-                type="text"
-                value={studentForm.password}
-                onChange={(e) => setStudentForm({ ...studentForm, password: e.target.value })}
-                placeholder={editingStudent ? "اترك فارغًا للإبقاء على القديمة" : "مثال: Ahmed@123"}
-                required={!editingStudent}
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="s-password"
+                  type="text"
+                  inputMode="numeric"
+                  dir="ltr"
+                  value={formatSecret(studentForm.password)}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, "").slice(0, 6);
+                    setStudentForm({ ...studentForm, password: digits });
+                  }}
+                  placeholder={editingStudent ? "اترك فارغًا للإبقاء على القديمة" : "مثال: 048 731"}
+                  required={!editingStudent}
+                  className="font-mono tracking-wider text-center"
+                />
+                {!editingStudent && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    title="توليد كلمة سر عشوائية"
+                    onClick={() => setStudentForm({ ...studentForm, password: generateSecretCode() })}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                6 أرقام — تُقسم بفراغ للسهولة وتُحفظ بدون فراغ.
+              </p>
             </div>
             <div>
               <Label htmlFor="s-name">اسم الطالب</Label>
@@ -1694,6 +1778,9 @@ export default function AdminPage() {
                 id="s-name"
                 value={studentForm.displayName}
                 onChange={(e) => setStudentForm({ ...studentForm, displayName: e.target.value })}
+                onBlur={() =>
+                  !editingStudent && !studentForm.password && applyExistingStudentPassword(studentForm.displayName)
+                }
                 placeholder="مثال: أحمد محمد"
                 required
               />
@@ -1733,6 +1820,20 @@ export default function AdminPage() {
                 )}
               </div>
             </div>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full gap-2"
+              disabled={
+                !studentForm.username.trim() ||
+                !studentForm.displayName.trim() ||
+                (!editingStudent && !studentForm.password.trim())
+              }
+              onClick={() => copyToClipboard(buildStudentMessage(studentForm))}
+            >
+              <Copy className="h-4 w-4" />
+              نسخ بيانات الطالب
+            </Button>
             <Button type="submit" className="w-full" disabled={studentSubmitting}>
               {studentSubmitting
                 ? "جاري الحفظ..."
