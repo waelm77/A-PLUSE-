@@ -177,6 +177,7 @@ export default function AdminPage() {
     displayName: "",
     enrolledSubjects: [] as string[],
   });
+  const [passwordAutoFormat, setPasswordAutoFormat] = useState(false);
   const [studentSubmitting, setStudentSubmitting] = useState(false);
   const [devicesDialogStudent, setDevicesDialogStudent] = useState<Student | null>(null);
 
@@ -411,11 +412,10 @@ export default function AdminPage() {
     return code;
   };
 
-  const formatSecret = (code: string) => {
-    const digits = code.replace(/\D/g, "").slice(0, 6);
-    if (digits.length <= 3) return digits;
-    return `${digits.slice(0, 3)} ${digits.slice(3)}`;
-  };
+  const formatSecret = (code: string) =>
+    code.replace(/\D/g, "").match(/.{1,3}/g)?.join(" ") ?? "";
+
+  const isolateLtr = (text: string) => `\u2066${text}\u2069`;
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -438,12 +438,15 @@ export default function AdminPage() {
       .map((id) => subjects.find((s) => s.id === id)?.name)
       .filter(Boolean)
       .join(", ");
+    const formattedPassword = passwordAutoFormat
+      ? isolateLtr(formatSecret(form.password))
+      : form.password;
     return [
       "منصه A+",
       "https://a-pluse.vercel.app/",
       "",
       `اسم المستخدم: ${form.username}`,
-      `كلمة السر: ${formatSecret(form.password)}`,
+      `كلمة السر: ${formattedPassword}`,
       `اسم الطالب: ${form.displayName}`,
       `المادة: ${subjectNames || "—"}`,
     ].join("\n");
@@ -457,13 +460,15 @@ export default function AdminPage() {
     );
     if (match) {
       setStudentForm((prev) => ({ ...prev, password: match.password }));
-      toast(`طالب موجود بنفس الاسم — تم استخدام رقمه السري: ${formatSecret(match.password)}`);
+      setPasswordAutoFormat(true);
+      toast(`طالب موجود بنفس الاسم — تم استخدام رقمه السري: ${isolateLtr(formatSecret(match.password))}`);
     }
   };
 
   const openAddStudent = () => {
     setEditingStudent(null);
     setStudentForm({ username: "", password: "", displayName: "", enrolledSubjects: [] });
+    setPasswordAutoFormat(false);
     setStudentDialogOpen(true);
   };
 
@@ -475,6 +480,7 @@ export default function AdminPage() {
       displayName: student.displayName,
       enrolledSubjects: student.enrolledSubjects,
     });
+    setPasswordAutoFormat(false);
     setStudentDialogOpen(true);
   };
 
@@ -1746,12 +1752,13 @@ export default function AdminPage() {
                   type="text"
                   inputMode="numeric"
                   dir="ltr"
-                  value={formatSecret(studentForm.password)}
+                  value={passwordAutoFormat ? formatSecret(studentForm.password) : studentForm.password}
                   onChange={(e) => {
-                    const digits = e.target.value.replace(/\D/g, "").slice(0, 6);
+                    const digits = e.target.value.replace(/\D/g, "").slice(0, 15);
+                    setPasswordAutoFormat(false);
                     setStudentForm({ ...studentForm, password: digits });
                   }}
-                  placeholder={editingStudent ? "اترك فارغًا للإبقاء على القديمة" : "مثال: 048 731"}
+                  placeholder={editingStudent ? "اترك فارغًا للإبقاء على القديمة" : ""}
                   required={!editingStudent}
                   className="font-mono tracking-wider text-center"
                 />
@@ -1762,15 +1769,15 @@ export default function AdminPage() {
                     size="icon"
                     className="shrink-0"
                     title="توليد كلمة سر عشوائية"
-                    onClick={() => setStudentForm({ ...studentForm, password: generateSecretCode() })}
+                    onClick={() => {
+                      setStudentForm({ ...studentForm, password: generateSecretCode() });
+                      setPasswordAutoFormat(true);
+                    }}
                   >
                     <Sparkles className="h-4 w-4" />
                   </Button>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                6 أرقام — تُقسم بفراغ للسهولة وتُحفظ بدون فراغ.
-              </p>
             </div>
             <div>
               <Label htmlFor="s-name">اسم الطالب</Label>
