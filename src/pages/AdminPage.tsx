@@ -490,10 +490,14 @@ export default function AdminPage() {
 
   const handleStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!studentForm.username.trim() || !studentForm.displayName.trim()) return;
     const cleanPassword = studentForm.password.replace(/\s+/g, "");
-    if (!editingStudent && !cleanPassword) {
-      toast.error("يرجى إدخال كلمة السر");
+    const missing: string[] = [];
+    if (!studentForm.username.trim()) missing.push("اسم المستخدم");
+    if (!editingStudent && !cleanPassword) missing.push("كلمة السر");
+    if (!studentForm.displayName.trim()) missing.push("اسم الطالب");
+    if (studentForm.enrolledSubjects.length === 0) missing.push("المادة");
+    if (missing.length) {
+      toast.error(`أحد البيانات فارغ: ${missing.join("، ")}`);
       return;
     }
     setStudentSubmitting(true);
@@ -509,11 +513,6 @@ export default function AdminPage() {
         await updateStudent(editingStudent.id, updates);
         toast.success("تم تعديل الطالب بنجاح");
       } else {
-        if (!cleanPassword) {
-          toast.error("يرجى إدخال كلمة السر");
-          setStudentSubmitting(false);
-          return;
-        }
         await createStudent({ ...studentForm, password: cleanPassword });
         toast.success("تم إضافة الطالب بنجاح");
       }
@@ -1742,7 +1741,6 @@ export default function AdminPage() {
                 value={studentForm.username}
                 onChange={(e) => setStudentForm({ ...studentForm, username: e.target.value })}
                 placeholder="مثال: ahmed_2026"
-                required
                 disabled={!!editingStudent}
               />
             </div>
@@ -1763,7 +1761,6 @@ export default function AdminPage() {
                     setStudentForm({ ...studentForm, password: digits });
                   }}
                   placeholder={editingStudent ? "اترك فارغًا للإبقاء على القديمة" : ""}
-                  required={!editingStudent}
                   className="font-mono tracking-wider text-center"
                 />
                 {!editingStudent && (
@@ -1793,7 +1790,6 @@ export default function AdminPage() {
                   !editingStudent && !studentForm.password && applyExistingStudentPassword(studentForm.displayName)
                 }
                 placeholder="مثال: أحمد محمد"
-                required
               />
             </div>
             <div>
