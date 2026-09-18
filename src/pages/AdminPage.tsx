@@ -1098,20 +1098,20 @@ export default function AdminPage() {
 
             {/* Students Table */}
             <Card className="glass border-none">
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle className="text-xl font-bold">قائمة الطلاب</CardTitle>
-                <div className="flex items-center gap-2">
-                  <div className="relative">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                  <div className="relative flex-1">
                     <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="بحث بالاسم أو اسم المستخدم..."
                       value={studentSearch}
                       onChange={(e) => setStudentSearch(e.target.value)}
-                      className="pr-9 w-48 sm:w-64"
+                      className="pr-9 w-full sm:w-64"
                       dir="rtl"
                     />
                   </div>
-                  <Button size="sm" className="gap-1" onClick={openAddStudent}>
+                  <Button size="sm" className="gap-1 w-full sm:w-auto justify-center" onClick={openAddStudent}>
                     <Plus className="h-4 w-4" />
                     إضافة طالب
                   </Button>
