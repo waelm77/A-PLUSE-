@@ -50,6 +50,7 @@ import {
   Send,
   ClipboardCheck,
   FormInput,
+  Swords,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import toast from "react-hot-toast";
@@ -92,6 +93,8 @@ import {
   toggleMaterialQuizFree,
   toggleMaterialQuizHidden,
   submitMaterialQuizResult,
+  createQuiz,
+  updateQuiz,
 } from "@/services/firestore";
 import type { Subject, Video, FileItem, Assessment, Quiz } from "@/types";
 import QuizEditorDialog, { type QuizPayload } from "@/components/QuizEditorDialog";
@@ -287,6 +290,9 @@ export default function SubjectPage() {
   const [thumbBusy, setThumbBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<"theory" | "review" | "practical" | "files" | "tests">("theory");
   const [dragId, setDragId] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [challengeQuizOpen, setChallengeQuizOpen] = useState(false);
+  const [editingChallengeQuiz, setEditingChallengeQuiz] = useState<Quiz | null>(null);
 
   const handleThumbSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -375,6 +381,11 @@ export default function SubjectPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
 
   const openAccessDialog = () => {
     setAccessUsername("");
@@ -757,6 +768,21 @@ export default function SubjectPage() {
     }
   };
 
+  const handleChallengeQuizSave = async (payload: QuizPayload, existingId?: string) => {
+    if (!id) return;
+    try {
+      if (existingId) {
+        await updateQuiz(existingId, payload);
+        toast.success("تم حفظ تعديلات اختبار التحدي");
+      } else {
+        await createQuiz(payload);
+        toast.success("تمت إضافة اختبار التحدي (يظهر في ساحة التحدي بعد تفعيلها)");
+      }
+    } catch {
+      toast.error("حدث خطأ أثناء حفظ الاختبار");
+    }
+  };
+
   const handleMaterialQuizSubmitFor = (quiz: Quiz) => async (
     answers: Record<number, string>
   ): Promise<QuizOutcome> => {
@@ -838,7 +864,8 @@ export default function SubjectPage() {
     <div className="min-h-screen bg-white">
       <Navbar />
 
-      {subject.challengeActive ? (
+      {subject.challengeActive &&
+      (!subject.challengeStartDate || now >= new Date(subject.challengeStartDate).getTime()) ? (
         <ChallengeSection
           subject={subject}
           isAdmin={isAdmin}
@@ -1295,7 +1322,28 @@ export default function SubjectPage() {
                           <div>
                             <p className="font-bold">اختبار تفاعلي من المنصة</p>
                             <p className="text-sm text-muted-foreground mt-0.5">
-                              أسئلة اختيار من متعدد بتحكمك الكامل، وتظهر نتائج الطلاب في إحصائيات المقرر
+                              أسئلة اختيار من متعدد تظهر مباشرة في هذه الصفحة، وتُسجَّل نتائج الطلاب في إحصائيات المقرر
+                            </p>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuizAddChoiceOpen(false);
+                            setEditingChallengeQuiz(null);
+                            setChallengeQuizOpen(true);
+                          }}
+                          className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-start transition hover:border-primary/50 hover:bg-primary/5"
+                        >
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white"
+                            style={{ backgroundColor: "#f59e0b" }}
+                          >
+                            <Swords className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <p className="font-bold">اختبار تحدي من المنصة</p>
+                            <p className="text-sm text-muted-foreground mt-0.5">
+                              يظهر فقط في ساحة التحدي بالمادة، ويُفعَّل من تبويب «ساحة التحدي» في لوحة الأدمن
                             </p>
                           </div>
                         </button>
@@ -1420,6 +1468,22 @@ export default function SubjectPage() {
           onClose={() => {
             setEditingMaterialQuiz(null);
             setMaterialQuizOpen(false);
+          }}
+        />
+      )}
+
+      {challengeQuizOpen && (
+        <QuizEditorDialog
+          quiz={editingChallengeQuiz}
+          subjectId={subject.id}
+          subjectColor="#f59e0b"
+          newTitle="إضافة اختبار تحدي من المنصة"
+          editTitle="تعديل اختبار التحدي"
+          onSave={handleChallengeQuizSave}
+          onSaved={() => setEditingChallengeQuiz(null)}
+          onClose={() => {
+            setEditingChallengeQuiz(null);
+            setChallengeQuizOpen(false);
           }}
         />
       )}

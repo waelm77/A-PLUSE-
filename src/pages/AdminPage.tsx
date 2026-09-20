@@ -52,6 +52,10 @@ import {
   Trophy,
   ClipboardCheck,
   ChevronDown,
+  Swords,
+  Pencil,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useTrialStore } from "@/store/trialStore";
@@ -75,9 +79,18 @@ import {
   sortSubjectsForView,
   subscribeAllMaterialQuizResults,
   deleteMaterialQuizResult,
+  subscribeQuizzesBySubject,
+  createQuiz,
+  updateQuiz,
+  deleteQuiz,
+  toggleQuizFree,
+  toggleQuizHidden,
+  createMaterialQuiz,
+  updateMaterialQuiz,
 } from "@/services/firestore";
 import { AVAILABLE_ICONS, COLORS } from "@/lib/constants";
-import type { Subject, Student, Ticker, Admin, StatsData, QuizResult } from "@/types";
+import type { Subject, Student, Ticker, Admin, StatsData, QuizResult, Quiz } from "@/types";
+import QuizEditorDialog, { type QuizPayload } from "@/components/QuizEditorDialog";
 
 export default function AdminPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
@@ -116,6 +129,96 @@ export default function AdminPage() {
       toast.success("تم حذف النتيجة");
     } catch {
       toast.error("حدث خطأ أثناء الحذف");
+    }
+  };
+
+  // ─── Arena (ساحة التحدي) State ──
+  const [arenaSubjectId, setArenaSubjectId] = useState<string | null>(null);
+  const [arenaTitle, setArenaTitle] = useState("");
+  const [arenaStart, setArenaStart] = useState("");
+  const [arenaEnd, setArenaEnd] = useState("");
+  const [arenaSaving, setArenaSaving] = useState(false);
+  const [arenaQuizzes, setArenaQuizzes] = useState<Quiz[]>([]);
+  const [arenaAddChoiceOpen, setArenaAddChoiceOpen] = useState(false);
+  const [arenaQuizType, setArenaQuizType] = useState<"material" | "challenge">("challenge");
+  const [arenaQuizOpen, setArenaQuizOpen] = useState(false);
+  const [arenaEditingQuiz, setArenaEditingQuiz] = useState<Quiz | null>(null);
+
+  useEffect(() => {
+    if (!arenaSubjectId) return;
+    return subscribeQuizzesBySubject(arenaSubjectId, setArenaQuizzes);
+  }, [arenaSubjectId]);
+
+  const [arenaNow, setArenaNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setArenaNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const openArenaSubject = (subject: Subject) => {
+    setArenaSubjectId(subject.id);
+    setArenaTitle(subject.challengeTitle || "");
+    setArenaStart(subject.challengeStartDate || "");
+    setArenaEnd(subject.challengeEndDate || "");
+  };
+
+  const handleArenaToggleActive = async (subject: Subject) => {
+    const next = !subject.challengeActive;
+    try {
+      await updateSubject(subject.id, { challengeActive: next });
+      toast.success(next ? "تم تفعيل التحدي في صفحة المادة" : "تم إيقاف التحدي في المادة");
+    } catch {
+      toast.error("حدث خطأ أثناء تغيير الحالة");
+    }
+  };
+
+  const handleArenaSave = async () => {
+    if (!arenaSubjectId) return;
+    setArenaSaving(true);
+    try {
+      await updateSubject(arenaSubjectId, {
+        challengeActive: true,
+        challengeTitle: arenaTitle.trim() || "ساحة التحدي",
+        challengeStartDate: arenaStart,
+        challengeEndDate: arenaEnd,
+      });
+      toast.success("تم حفظ إعدادات ساحة التحدي");
+    } catch {
+      toast.error("حدث خطأ أثناء الحفظ");
+    } finally {
+      setArenaSaving(false);
+    }
+  };
+
+  const addArenaQuiz = (type: "material" | "challenge") => {
+    setArenaAddChoiceOpen(false);
+    setArenaEditingQuiz(null);
+    setArenaQuizType(type);
+    setArenaQuizOpen(true);
+  };
+
+  const handleArenaQuizSave = async (payload: QuizPayload, existingId?: string) => {
+    if (!arenaSubjectId) return;
+    try {
+      if (arenaQuizType === "material") {
+        if (existingId) {
+          await updateMaterialQuiz(existingId, payload);
+          toast.success("تم حفظ تعديلات الاختبار التفاعلي");
+        } else {
+          await createMaterialQuiz(payload);
+          toast.success("تمت إضافة الاختبار التفاعلي (يظهر فوراً في اختبارات المادة)");
+        }
+      } else {
+        if (existingId) {
+          await updateQuiz(existingId, payload);
+          toast.success("تم حفظ تعديلات اختبار التحدي");
+        } else {
+          await createQuiz(payload);
+          toast.success("تمت إضافة اختبار التحدي (يظهر فقط في ساحة التحدي بعد تفعيلها)");
+        }
+      }
+    } catch {
+      toast.error("حدث خطأ أثناء الحفظ");
     }
   };
 
@@ -159,9 +262,6 @@ export default function AdminPage() {
     countdownActive: false,
     countdownTitle: "الفترة التجريبية تنتهي خلال",
     countdownEndDate: "",
-    challengeActive: false,
-    challengeTitle: "",
-    challengeEndDate: "",
   });
 
   // ─── Ticker handlers ──
@@ -357,13 +457,10 @@ export default function AdminPage() {
         countdownActive: subject.countdownActive || false,
         countdownTitle: subject.countdownTitle || "الفترة التجريبية تنتهي خلال",
         countdownEndDate: subject.countdownEndDate || "",
-        challengeActive: subject.challengeActive || false,
-        challengeTitle: subject.challengeTitle || "",
-        challengeEndDate: subject.challengeEndDate || "",
       });
     } else {
       setEditingSubject(null);
-      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px", countdownActive: false, countdownTitle: "الفترة التجريبية تنتهي خلال", countdownEndDate: "", challengeActive: false, challengeTitle: "", challengeEndDate: "" });
+      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px", countdownActive: false, countdownTitle: "الفترة التجريبية تنتهي خلال", countdownEndDate: "" });
     }
     setOpen(true);
   };
@@ -388,9 +485,6 @@ export default function AdminPage() {
         countdownActive: form.countdownActive,
         countdownTitle: form.countdownTitle.trim() || "الفترة التجريبية تنتهي خلال",
         countdownEndDate: form.countdownActive ? form.countdownEndDate : "",
-        challengeActive: form.challengeActive,
-        challengeTitle: form.challengeTitle.trim() || "منصة التحدي",
-        challengeEndDate: form.challengeActive ? form.challengeEndDate : "",
       };
       if (editingSubject) {
         await updateSubject(editingSubject.id, subjectData);
@@ -401,7 +495,7 @@ export default function AdminPage() {
       }
       setOpen(false);
       setEditingSubject(null);
-      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px", countdownActive: false, countdownTitle: "الفترة التجريبية تنتهي خلال", countdownEndDate: "", challengeActive: false, challengeTitle: "", challengeEndDate: "" });
+      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px", countdownActive: false, countdownTitle: "الفترة التجريبية تنتهي خلال", countdownEndDate: "" });
       await loadSubjects();
     } catch {
       toast.error(editingSubject ? "حدث خطأ أثناء التعديل" : "حدث خطأ أثناء الإضافة");
@@ -731,6 +825,10 @@ export default function AdminPage() {
               <Clock className="h-4 w-4" />
               الفترة التجريبية
             </TabsTrigger>
+            <TabsTrigger value="arena" className="gap-2 shrink-0">
+              <Swords className="h-4 w-4" />
+              ساحة التحدي
+            </TabsTrigger>
             <TabsTrigger value="analytics" className="gap-2 shrink-0">
               <BarChart3 className="h-4 w-4" />
               الإحصائيات
@@ -980,67 +1078,6 @@ export default function AdminPage() {
                                   })}
                                 </p>
                               )}
-                            </div>
-                          </>
-                        )}
-                      </div>
-
-                      {/* ── Challenge settings for this subject ── */}
-                      <div className="space-y-4 rounded-lg border p-4">
-                        <p className="text-sm font-bold text-muted-foreground flex items-center gap-2">
-                          <Trophy className="h-4 w-4" /> منصة التحدي لهذه المادة
-                        </p>
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            id="subject-challenge-active"
-                            checked={form.challengeActive}
-                            onChange={(e) => setForm({ ...form, challengeActive: e.target.checked })}
-                            className="w-4 h-4 rounded border-gray-300"
-                          />
-                          <Label htmlFor="subject-challenge-active" className="mb-0">
-                            تفعيل التحدي في صفحة المادة (يحل محل العد التنازلي)
-                          </Label>
-                        </div>
-
-                        {form.challengeActive && (
-                          <>
-                            <div>
-                              <Label>عنوان التحدي</Label>
-                              <Input
-                                value={form.challengeTitle}
-                                onChange={(e) => setForm({ ...form, challengeTitle: e.target.value })}
-                                placeholder="مثال: التحدي الأسبوعي"
-                                className="mt-2"
-                              />
-                            </div>
-                            <div>
-                              <Label>موعد انتهاء التحدي (يُغلَق تلقائياً ويظهر لوحة الشرف)</Label>
-                              <input
-                                type="datetime-local"
-                                value={form.challengeEndDate ? form.challengeEndDate.slice(0, 16) : ""}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setForm({ ...form, challengeEndDate: val ? new Date(val).toISOString() : "" });
-                                }}
-                                className="mt-2 flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                dir="ltr"
-                              />
-                              {form.challengeEndDate && (
-                                <p className="text-sm font-bold text-primary mt-2 flex items-center gap-2">
-                                  <Calendar className="h-4 w-4" />
-                                  {new Date(form.challengeEndDate).toLocaleString("ar-SA", {
-                                    year: "numeric",
-                                    month: "long",
-                                    day: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </p>
-                              )}
-                              <p className="text-xs text-muted-foreground mt-1">
-                                بعد هذا الموعد يتوقف قبول المحاولات وتُعرض نتائج الأفضل 5 ثابتة في "لوحة الشرف".
-                              </p>
                             </div>
                           </>
                         )}
@@ -1697,6 +1734,278 @@ export default function AdminPage() {
             </Card>
           </TabsContent>
 
+          {/* ════════ Arena (ساحة التحدي) Tab ════════ */}
+          <TabsContent value="arena">
+            <div className="space-y-6">
+              <Card className="glass border-none">
+                <CardHeader>
+                  <CardTitle className="text-xl font-bold flex items-center gap-2">
+                    <Trophy className="h-5 w-5 text-amber-400" fill="currentColor" />
+                    ساحة التحدي
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    فعّل التحدي لكل مادة وحدّد زمن ظهوره وإغلاقه. أضف اختباراتك من المنصة هنا أو من
+                    صفحة المادة (اختبار تفاعلي يظهر في «اختبارات تدريبية» مباشرة، واختبار تحدي يظهر
+                    فقط في الساحة عند تفعيلها).
+                  </p>
+                </CardHeader>
+              </Card>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {subjects.length === 0 && (
+                  <p className="text-sm text-muted-foreground">لا توجد مواد مضافة بعد.</p>
+                )}
+                {subjects.map((subject) => {
+                  const Icon = AVAILABLE_ICONS.find((i) => i.name === subject.icon)?.icon || BookOpen;
+                  const now = arenaNow;
+                  const active = !!subject.challengeActive;
+                  const started =
+                    active &&
+                    (!subject.challengeStartDate ||
+                      now >= new Date(subject.challengeStartDate).getTime());
+                  const ended =
+                    active && subject.challengeEndDate && now >= new Date(subject.challengeEndDate).getTime();
+let status: { label: string; cls: string } = { label: "غير مفعّل", cls: "bg-gray-500/90" };
+                  if (active && !started) status = { label: "مجدول", cls: "bg-amber-500/90" };
+                  else if (active && started && !ended) status = { label: "نشط", cls: "bg-green-500/90" };
+                  else if (active && ended) status = { label: "منتهي", cls: "bg-red-500/90" };
+                  const selected = arenaSubjectId === subject.id;
+                  return (
+                    <button
+                      key={subject.id}
+                      type="button"
+                      onClick={() => openArenaSubject(subject)}
+                      className={`rounded-2xl border p-4 text-start transition ${
+                        selected ? "ring-2 ring-primary" : "hover:border-primary/50"
+                      }`}
+                      style={{
+                        borderColor: subject.color + (selected ? "66" : "33"),
+                        backgroundColor: subject.color + "0d",
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div
+                          className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                          style={{ backgroundColor: subject.color }}
+                        >
+                          <Icon className="h-6 w-6 text-white" />
+                        </div>
+                        <span className={`rounded px-2 py-0.5 text-[11px] font-bold text-white ${status.cls}`}>
+                          {status.label}
+                        </span>
+                      </div>
+                      <p className="font-bold truncate">{subject.name}</p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {arenaSubjectId &&
+                (() => {
+                  const subject = subjects.find((s) => s.id === arenaSubjectId);
+                  if (!subject) return null;
+                  const Icon = AVAILABLE_ICONS.find((i) => i.name === subject.icon)?.icon || BookOpen;
+                  return (
+                    <Card className="glass border-none">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-lg font-bold flex items-center gap-2">
+                          <span
+                            className="flex h-8 w-8 items-center justify-center rounded-lg"
+                            style={{ backgroundColor: subject.color }}
+                          >
+                            <Icon className="h-4 w-4 text-white" />
+                          </span>
+                          التحكم في التحدي: {subject.name}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-5">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            id="arena-active"
+                            checked={!!subject.challengeActive}
+                            onChange={() => handleArenaToggleActive(subject)}
+                            className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                          />
+                          <Label htmlFor="arena-active" className="mb-0">
+                            {subject.challengeActive
+                              ? "التحدي مفعّل في صفحة المادة"
+                              : "تفعيل التحدي في صفحة المادة"}
+                          </Label>
+                        </div>
+
+                        <div>
+                          <Label>عنوان التحدي</Label>
+                          <Input
+                            value={arenaTitle}
+                            onChange={(e) => setArenaTitle(e.target.value)}
+                            placeholder="مثال: ساحة التحدي الأسبوعي"
+                            className="mt-2"
+                          />
+                        </div>
+
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <Label className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4" /> موعد بدء التحدي (زمن ظهوره)
+                            </Label>
+                            <input
+                              type="datetime-local"
+                              value={arenaStart ? arenaStart.slice(0, 16) : ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setArenaStart(val ? new Date(val).toISOString() : "");
+                              }}
+                              className="mt-2 flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              dir="ltr"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              قبل هذا الموعد تبقى صفحة المادة بوضعها العادي ويظهر التحدي عند وصوله.
+                            </p>
+                            {arenaStart && (
+                              <p className="text-sm font-bold text-primary mt-2 flex items-center gap-2">
+                                <Calendar className="h-4 w-4" />
+                                {new Date(arenaStart).toLocaleString("ar-SA", {
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </p>
+                            )}
+                          </div>
+                          <div>
+                            <Label className="flex items-center gap-2">
+                              <Clock className="h-4 w-4" /> موعد انتهاء التحدي
+                            </Label>
+                            <input
+                              type="datetime-local"
+                              value={arenaEnd ? arenaEnd.slice(0, 16) : ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setArenaEnd(val ? new Date(val).toISOString() : "");
+                              }}
+                              className="mt-2 flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              dir="ltr"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              بعد هذا الموعد يتوقف قبول المحاولات وتُعرض لوحة الشرف.
+                            </p>
+                            {arenaEnd && (
+                              <p className="text-sm font-bold text-primary mt-2 flex items-center gap-2">
+                                <Clock className="h-4 w-4" />
+                                {new Date(arenaEnd).toLocaleString("ar-SA", {
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <Button onClick={handleArenaSave} className="gap-2" disabled={arenaSaving}>
+                          {arenaSaving ? "جاري الحفظ..." : "حفظ إعدادات الساحة"}
+                        </Button>
+
+                        <div className="rounded-lg border p-4 space-y-3">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <p className="font-bold flex items-center gap-2">
+                              <ClipboardCheck className="h-4 w-4" /> اختبارات المنصة لهذه المادة
+                            </p>
+                            <Button size="sm" className="gap-1" onClick={() => setArenaAddChoiceOpen(true)}>
+                              <Plus className="h-4 w-4" />
+                              إضافة اختبار من المنصة
+                            </Button>
+                          </div>
+                          {arenaQuizzes.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                              لا توجد اختبارات تحدٍّ لهذه المادة بعد.
+                            </p>
+                          ) : (
+                            <div className="space-y-2">
+                              {arenaQuizzes.map((q) => {
+                                const isFree = q.isFree ?? true;
+                                const isHidden = q.isHidden ?? false;
+                                return (
+                                  <div
+                                    key={q.id}
+                                    className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2"
+                                  >
+                                    <div className="min-w-0">
+                                      <p className="font-medium truncate">{q.title}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {q.questions.length} سؤال{isFree ? " • مجاني" : " • للمشتركين"}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="p-2 h-auto"
+                                        title="تعديل"
+                                        onClick={() => {
+                                          setArenaEditingQuiz(q);
+                                          setArenaQuizType("challenge");
+                                          setArenaQuizOpen(true);
+                                        }}
+                                      >
+                                        <Pencil className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className={`p-2 h-auto ${isFree ? "text-green-600 hover:bg-green-50" : "text-orange-600 hover:bg-orange-50"}`}
+                                        title={isFree ? "تحويل للمشتركين فقط" : "تحويل لمجاني"}
+                                        onClick={async () => {
+                                          await toggleQuizFree(q.id, !isFree);
+                                          toast.success(isFree ? "أصبح للمشتركين فقط" : "أصبح مجانياً");
+                                        }}
+                                      >
+                                        {isFree ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className={`p-2 h-auto ${isHidden ? "text-amber-600" : "text-muted-foreground hover:text-amber-600"}`}
+                                        title={isHidden ? "إظهار الاختبار" : "إخفاء الاختبار"}
+                                        onClick={async () => {
+                                          await toggleQuizHidden(q.id, !isHidden);
+                                          toast.success(isHidden ? "أصبح ظاهراً" : "أصبح مخفياً");
+                                        }}
+                                      >
+                                        {isHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        className="p-2 h-auto"
+                                        title="حذف"
+                                        onClick={async () => {
+                                          if (!confirm("حذف هذا الاختبار؟")) return;
+                                          await deleteQuiz(q.id);
+                                          toast.success("تم الحذف");
+                                        }}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
+            </div>
+          </TabsContent>
+
           {/* ════════ Analytics Tab ════════ */}
           <TabsContent value="analytics">
             {statsLoading ? (
@@ -2220,6 +2529,65 @@ export default function AdminPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* ════ Arena: Add quiz type chooser ════ */}
+      {arenaSubjectId && (
+        <Dialog open={arenaAddChoiceOpen} onOpenChange={setArenaAddChoiceOpen}>
+          <DialogContent className="max-w-md" dir="rtl" aria-describedby={undefined}>
+            <DialogHeader>
+              <DialogTitle>إضافة اختبار من المنصة</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-3 mt-4">
+              <button
+                type="button"
+                onClick={() => addArenaQuiz("material")}
+                className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-start transition hover:border-primary/50 hover:bg-primary/5"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-green-500/15 text-green-600">
+                  <ClipboardCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-bold">اختبار تفاعلي</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    يظهر مباشرة في تبويب «اختبارات تدريبية» بالمادة
+                  </p>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => addArenaQuiz("challenge")}
+                className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-start transition hover:border-primary/50 hover:bg-primary/5"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white" style={{ backgroundColor: "#f59e0b" }}>
+                  <Swords className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-bold">اختبار تحدي</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    يظهر فقط في ساحة التحدي بالمادة بعد تفعيلها من هنا
+                  </p>
+                </div>
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {arenaQuizOpen && (
+        <QuizEditorDialog
+          quiz={arenaEditingQuiz}
+          subjectId={arenaSubjectId || ""}
+          subjectColor={subjects.find((s) => s.id === arenaSubjectId)?.color || COLORS[0]}
+          newTitle={arenaQuizType === "challenge" ? "إضافة اختبار تحدي" : "إضافة اختبار تفاعلي"}
+          editTitle={arenaQuizType === "challenge" ? "تعديل اختبار التحدي" : "تعديل الاختبار التفاعلي"}
+          onSave={handleArenaQuizSave}
+          onSaved={() => setArenaEditingQuiz(null)}
+          onClose={() => {
+            setArenaEditingQuiz(null);
+            setArenaQuizOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

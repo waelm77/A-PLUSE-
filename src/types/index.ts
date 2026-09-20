@@ -18,6 +18,7 @@ export interface Subject {
   countdownEndDate?: string;
   challengeActive?: boolean;
   challengeTitle?: string;
+  challengeStartDate?: string;
   challengeEndDate?: string;
   isHidden?: boolean;
 }

@@ -176,7 +176,7 @@ export default function ChallengeSection({
               </div>
               <div>
                 <h2 className="text-2xl sm:text-3xl font-black" style={{ color: subject.color }}>
-                  {subject.challengeTitle?.trim() || "منصة التحدي"}
+                  {subject.challengeTitle?.trim() || "ساحة التحدي"}
                 </h2>
                 <p className="text-sm text-muted-foreground">
                   {ended ? "تم انتهاء التحدي — إليك أبطال العهد" : `الأفضل يسجلون أسمائهم في لوحة الشرف`}

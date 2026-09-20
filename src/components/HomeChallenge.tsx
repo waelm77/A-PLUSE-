@@ -18,7 +18,11 @@ export default function HomeChallenge({ subjects }: { subjects: Subject[] }) {
     return () => clearInterval(id);
   }, []);
   const activeSubjects = subjects.filter(
-    (s) => s.challengeActive && s.challengeEndDate && now < new Date(s.challengeEndDate).getTime()
+    (s) =>
+      s.challengeActive &&
+      (!s.challengeStartDate || now >= new Date(s.challengeStartDate).getTime()) &&
+      s.challengeEndDate &&
+      now < new Date(s.challengeEndDate).getTime()
   );
   const hallOfFame = subjects
     .filter((s) => s.challengeActive && s.challengeEndDate && now >= new Date(s.challengeEndDate).getTime())
@@ -65,7 +69,7 @@ export default function HomeChallenge({ subjects }: { subjects: Subject[] }) {
               <Trophy className="h-6 w-6 text-white" fill="currentColor" />
             </div>
             <div>
-              <h2 className="text-xl sm:text-2xl font-black text-foreground">منصة التحدي</h2>
+              <h2 className="text-xl sm:text-2xl font-black text-foreground">ساحة التحدي</h2>
               <p className="text-sm text-muted-foreground">أفضل 5 على مستوى المنصة — يُحدَّث تلقائياً بعد كل اختبار</p>
             </div>
           </div>
