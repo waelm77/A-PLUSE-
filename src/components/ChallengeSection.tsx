@@ -165,39 +165,35 @@ export default function ChallengeSection({
           style={{ background: subject.color + "22" }}
         />
         <div className="relative z-10">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
-<div className="flex items-center gap-3">
-                <div
-                  className="flex h-12 w-12 items-center justify-center rounded-2xl shadow-lg"
-                  style={{ backgroundColor: subject.color, boxShadow: `0 6px 20px ${subject.color}66` }}
-                >
-                  <Trophy className="h-6 w-6 text-white" fill="currentColor" />
+          <div className="flex flex-col items-center text-center">
+            <div
+              className="mb-3 flex h-20 w-20 items-center justify-center rounded-3xl shadow-lg"
+              style={{ backgroundColor: subject.color, boxShadow: `0 10px 32px ${subject.color}66` }}
+            >
+              <Trophy className="h-11 w-11 text-white" fill="currentColor" />
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <h2 className="text-3xl sm:text-4xl font-black text-gradient">ساحة التحدي</h2>
+              <span
+                className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold text-white shadow"
+                style={{ backgroundColor: subject.color }}
+              >
+                <ClipboardList className="h-3.5 w-3.5" />
+                اختبارات التحدي
+              </span>
+            </div>
+            <p className="mt-2 text-sm font-semibold text-foreground/80">
+              {ended ? "انتهى التحدي — إليك أبطال التحدي" : `الأفضل تسجل أسماؤهم في لوحة الشرف`}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              {endDate && !ended && (
+                <div className="flex items-center gap-2 rounded-full bg-foreground/5 px-3 py-1.5">
+                  <Clock className="h-4 w-4" style={{ color: subject.color }} />
+                  <span className="text-sm font-black" style={{ color: subject.color }}>
+                    الوقت المتبقي على الانتهاء
+                  </span>
                 </div>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-2xl sm:text-3xl font-black text-gradient">ساحة التحدي</h2>
-                    <span
-                      className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold text-white shadow"
-                      style={{ backgroundColor: subject.color }}
-                    >
-                      <ClipboardList className="h-3.5 w-3.5" />
-                      اختبارات التحدي
-                    </span>
-                  </div>
-                  <p className="mt-1.5 text-[13px] font-semibold text-foreground/80">
-                    {ended ? "انتهى التحدي — إليك أبطال التحدي" : `الأفضل تسجل أسماؤهم في لوحة الشرف`}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {endDate && !ended && (
-                  <div className="flex items-center gap-2 rounded-full bg-foreground/5 px-3 py-1.5">
-                    <Clock className="h-4 w-4" style={{ color: subject.color }} />
-                    <span className="text-sm font-black" style={{ color: subject.color }}>
-                      الوقت المتبقي على الانتهاء
-                    </span>
-                  </div>
-                )}
+              )}
               {ended && endDate && (
                 <span className="rounded-full bg-red-500/15 px-3 py-1 text-sm font-bold text-red-600">
                   انتهى التحدي
@@ -271,9 +267,17 @@ export default function ChallengeSection({
                               : (myResult ? "المحاولة الثانية" : "ابدأ التحدي")}
                         </Button>
                       ) : (
-                        <Button size="sm" variant="secondary" className="w-full gap-1" onClick={onOpenAccess}>
+                        <Button
+                          size="sm"
+                          className="w-full gap-1"
+                          onClick={() => {
+                            toast.error("يجب عليك الاشتراك لخوض التحدي");
+                            onOpenAccess();
+                          }}
+                          style={{ backgroundColor: subject.color }}
+                        >
                           <Lock className="h-4 w-4" />
-                          سجّل دخولك للاشتراك
+                          ابدأ التحدي
                         </Button>
                       )}
                     </div>
