@@ -138,7 +138,7 @@ export default function QuizEditorDialog({
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto" dir="rtl">
+      <DialogContent className="max-w-4xl max-h-[88vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
           <DialogTitle>{form.id ? editTitle : newTitle}</DialogTitle>
         </DialogHeader>

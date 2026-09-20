@@ -172,6 +172,16 @@ export default function AdminPage() {
     }
   };
 
+  const handleArenaToggleShare = async (subject: Subject) => {
+    const next = !subject.shareChallengePractice;
+    try {
+      await updateSubject(subject.id, { shareChallengePractice: next });
+      toast.success(next ? "ستُعرض اختبارات التحدي في «اختبارات تدريبية» بعد انتهائه" : "تم إيقاف مشاركة اختبارات التحدي كتدريب");
+    } catch {
+      toast.error("حدث خطأ أثناء تغيير الحالة");
+    }
+  };
+
   const handleArenaSave = async () => {
     if (!arenaSubjectId) return;
     setArenaSaving(true);
@@ -1831,6 +1841,19 @@ let status: { label: string; cls: string } = { label: "غير مفعّل", cls: 
                             {subject.challengeActive
                               ? "التحدي مفعّل في صفحة المادة"
                               : "تفعيل التحدي في صفحة المادة"}
+                          </Label>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            id="arena-share"
+                            checked={!!subject.shareChallengePractice}
+                            onChange={() => handleArenaToggleShare(subject)}
+                            className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                          />
+                          <Label htmlFor="arena-share" className="mb-0">
+                            مشاركة اختبارات التحدي في «اختبارات تدريبية» (تظهر للطلاب للتدريب بعد انتهاء التحدي أو عند إيقافه)
                           </Label>
                         </div>
 

@@ -20,6 +20,7 @@ export interface Subject {
   challengeTitle?: string;
   challengeStartDate?: string;
   challengeEndDate?: string;
+  shareChallengePractice?: boolean;
   isHidden?: boolean;
 }
 

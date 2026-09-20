@@ -95,6 +95,10 @@ import {
   submitMaterialQuizResult,
   createQuiz,
   updateQuiz,
+  deleteQuiz,
+  toggleQuizFree,
+  toggleQuizHidden,
+  subscribeQuizzesBySubject,
 } from "@/services/firestore";
 import type { Subject, Video, FileItem, Assessment, Quiz } from "@/types";
 import QuizEditorDialog, { type QuizPayload } from "@/components/QuizEditorDialog";
@@ -338,6 +342,7 @@ export default function SubjectPage() {
   });
 
   const [materialQuizzes, setMaterialQuizzes] = useState<Quiz[]>([]);
+  const [challengeQuizzes, setChallengeQuizzes] = useState<Quiz[]>([]);
   const [materialQuizOpen, setMaterialQuizOpen] = useState(false);
   const [editingMaterialQuiz, setEditingMaterialQuiz] = useState<Quiz | null>(null);
   const [activeMaterialQuiz, setActiveMaterialQuiz] = useState<Quiz | null>(null);
@@ -352,6 +357,7 @@ export default function SubjectPage() {
       subscribeFilesBySubject(id, setFilesList, () => toast.error("حدث خطأ في تحميل الملفات")),
       subscribeAssessmentsBySubject(id, setAssessments, () => toast.error("حدث خطأ في تحميل الاختبارات")),
       subscribeMaterialQuizzesBySubject(id, setMaterialQuizzes, () => toast.error("حدث خطأ في تحميل الاختبارات التفاعلية")),
+      subscribeQuizzesBySubject(id, setChallengeQuizzes, () => toast.error("حدث خطأ في تحميل اختبارات التحدي")),
     ];
     try {
       const sub = await getSubjectById(id);
@@ -487,6 +493,10 @@ export default function SubjectPage() {
   const visibleMaterialQuizzes = useMemo(
     () => (isAdmin ? materialQuizzes : materialQuizzes.filter((q) => !q.isHidden)),
     [isAdmin, materialQuizzes]
+  );
+  const visibleSharedChallengeQuizzes = useMemo(
+    () => (isAdmin ? challengeQuizzes : challengeQuizzes.filter((q) => !q.isHidden)),
+    [isAdmin, challengeQuizzes]
   );
 
   const openVideoDialog = (video?: Video, presetType?: "theory" | "review" | "practical") => {
@@ -835,6 +845,34 @@ export default function SubjectPage() {
     }
   };
 
+  const handleToggleChallengeQuizFree = async (quizId: string, current: boolean) => {
+    try {
+      await toggleQuizFree(quizId, !current);
+      toast.success(!current ? "تم جعل الاختبار مجاني" : "تم جعل الاختبار للمشتركين فقط");
+    } catch {
+      toast.error("حدث خطأ أثناء تغيير الحالة");
+    }
+  };
+
+  const handleToggleChallengeQuizHidden = async (quizId: string, current: boolean) => {
+    try {
+      await toggleQuizHidden(quizId, !current);
+      toast.success(!current ? "تم إخفاء الاختبار" : "تم إظهار الاختبار");
+    } catch {
+      toast.error("حدث خطأ أثناء تغيير الحالة");
+    }
+  };
+
+  const handleDeleteChallengeQuiz = async (quizId: string) => {
+    if (!confirm("حذف هذا الاختبار ونتائجه؟")) return;
+    try {
+      await deleteQuiz(quizId);
+      toast.success("تم الحذف");
+    } catch {
+      toast.error("حدث خطأ أثناء الحذف");
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white">
@@ -859,6 +897,13 @@ export default function SubjectPage() {
       </div>
     );
   }
+
+  const challengeRunning = !!(
+    subject.challengeActive &&
+    (!subject.challengeStartDate || now >= new Date(subject.challengeStartDate).getTime()) &&
+    (!subject.challengeEndDate || now < new Date(subject.challengeEndDate).getTime())
+  );
+  const showSharedChallenge = !!subject.shareChallengePractice && !challengeRunning;
 
   return (
     <div className="min-h-screen bg-white">
@@ -1393,7 +1438,9 @@ export default function SubjectPage() {
                 </>
               )}
             </div>
-            {visibleAssessments.length > 0 || visibleMaterialQuizzes.length > 0 ? (
+            {visibleAssessments.length > 0 ||
+              visibleMaterialQuizzes.length > 0 ||
+              (showSharedChallenge && visibleSharedChallengeQuizzes.length > 0) ? (
               <div className="space-y-3">
                 {visibleAssessments.map((test) => (
                   <div
@@ -1436,6 +1483,33 @@ export default function SubjectPage() {
                     onDelete={(qq) => handleDeleteMaterialQuiz(qq.id)}
                   />
                 ))}
+                {showSharedChallenge && visibleSharedChallengeQuizzes.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-2 pt-2">
+                      <Swords className="h-4 w-4 text-amber-500" />
+                      <p className="text-sm font-bold">اختبارات التحدي (للمراجعة والتدريب بعد انتهاء التحدي)</p>
+                    </div>
+                    {visibleSharedChallengeQuizzes.map((q) => (
+                      <MaterialQuizCard
+                        key={q.id}
+                        quiz={q}
+                        badge="اختبار تحدي سابق"
+                        isAdmin={isAdmin}
+                        color={subject.color}
+                        hasSubjectAccess={hasSubjectAccess}
+                        onOpenAccess={openAccessDialog}
+                        onStart={() => setActiveMaterialQuiz(q)}
+                        onEdit={() => {
+                          setEditingChallengeQuiz(q);
+                          setChallengeQuizOpen(true);
+                        }}
+                        onToggleFree={(qq) => handleToggleChallengeQuizFree(qq.id, qq.isFree ?? true)}
+                        onToggleHide={(qq) => handleToggleChallengeQuizHidden(qq.id, qq.isHidden ?? false)}
+                        onDelete={(qq) => handleDeleteChallengeQuiz(qq.id)}
+                      />
+                    ))}
+                  </>
+                )}
               </div>
             ) : (
               <EmptyState icon={LayoutDashboard} text="لا توجد اختبارات تدريبية متاحة" />
@@ -2351,6 +2425,7 @@ function MaterialQuizCard({
   onToggleFree,
   onToggleHide,
   onDelete,
+  badge = "اختبار تفاعلي",
 }: {
   quiz: Quiz;
   isAdmin: boolean;
@@ -2362,6 +2437,7 @@ function MaterialQuizCard({
   onToggleFree: (q: Quiz) => void;
   onToggleHide: (q: Quiz) => void;
   onDelete: (q: Quiz) => void;
+  badge?: string;
 }) {
   const canAccess = isAdmin || quiz.isFree || hasSubjectAccess;
 
@@ -2379,7 +2455,7 @@ function MaterialQuizCard({
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-semibold truncate">{quiz.title}</p>
               <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary font-bold">
-                اختبار تفاعلي
+                {badge}
               </span>
             </div>
             <p className="text-xs text-muted-foreground">
