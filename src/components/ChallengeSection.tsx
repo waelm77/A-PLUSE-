@@ -179,7 +179,7 @@ export default function ChallengeSection({
                   {subject.challengeTitle?.trim() || "ساحة التحدي"}
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  {ended ? "تم انتهاء التحدي — إليك أبطال العهد" : `الأفضل يسجلون أسمائهم في لوحة الشرف`}
+                  {ended ? "انتهى التحدي — إليك أبطال التحدي" : `الأفضل يسجلون أسمائهم في لوحة الشرف`}
                 </p>
               </div>
             </div>
