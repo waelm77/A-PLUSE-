@@ -58,6 +58,8 @@ export default function ChallengeLeaderboard({
   medalCounts,
   hideAttemptNote,
   emptyText = "لا توجد نتائج بعد — كن أول من يتحدى!",
+  subjectNamesByUser,
+  defaultSubjectName,
 }: {
   results: QuizResult[];
   limit?: number;
@@ -66,6 +68,8 @@ export default function ChallengeLeaderboard({
   medalCounts?: Record<string, number>;
   hideAttemptNote?: boolean;
   emptyText?: string;
+  subjectNamesByUser?: Record<string, string>;
+  defaultSubjectName?: string;
 }) {
   const top = [...results].sort(compareQuizResults).slice(0, limit);
   const maxScore = 100;
@@ -139,6 +143,18 @@ export default function ChallengeLeaderboard({
                 <span className="sr-only">{meta.label}</span>
               </div>
               <span className="max-w-full truncate text-xs font-bold">{r.studentName}</span>
+              {(subjectNamesByUser
+                ? subjectNamesByUser[r.username] ?? subjectNamesByUser[r.studentName]
+                : defaultSubjectName) && (
+                <span
+                  className="max-w-full truncate text-[10px] font-bold"
+                  style={{ color: subjectColor }}
+                >
+                  تفوق في {subjectNamesByUser
+                    ? subjectNamesByUser[r.username] ?? subjectNamesByUser[r.studentName]
+                    : defaultSubjectName}
+                </span>
+              )}
               {!hideAttemptNote && (
                 <span className="text-[10px] text-muted-foreground">{attemptNote(r)}</span>
               )}

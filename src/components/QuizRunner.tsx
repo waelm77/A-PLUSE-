@@ -221,7 +221,6 @@ export default function QuizRunner({
                   <span className="text-lg font-black">{celebrationMsg.text}</span>
                 </div>
               )}
-              {attemptBanner()}
             </div>
 
             {/* Review toggle */}
@@ -287,6 +286,7 @@ export default function QuizRunner({
                 إنهاء
               </Button>
             </div>
+            {attemptBanner()}
           </div>
         )}
       </DialogContent>

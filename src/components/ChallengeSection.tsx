@@ -268,7 +268,7 @@ export default function ChallengeSection({
                             ? "التحدي انتهى"
                             : attemptsReached
                               ? "استوفيت محاولاتك"
-                              : (myResult ? "المحاولة الثانية" : "ابدأ الاختبار")}
+                              : (myResult ? "المحاولة الثانية" : "ابدأ التحدي")}
                         </Button>
                       ) : (
                         <Button size="sm" variant="secondary" className="w-full gap-1" onClick={onOpenAccess}>
@@ -350,6 +350,7 @@ export default function ChallengeSection({
               subjectColor={subject.color}
               showMedalCounts
               medalCounts={medalCounts}
+              defaultSubjectName={subject.name}
             />
           </div>
         </div>

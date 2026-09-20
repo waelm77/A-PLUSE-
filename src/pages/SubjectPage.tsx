@@ -909,18 +909,6 @@ export default function SubjectPage() {
     <div className="min-h-screen bg-white">
       <Navbar />
 
-      {subject.challengeActive &&
-      (!subject.challengeStartDate || now >= new Date(subject.challengeStartDate).getTime()) ? (
-        <ChallengeSection
-          subject={subject}
-          isAdmin={isAdmin}
-          hasSubjectAccess={hasSubjectAccess}
-          onOpenAccess={openAccessDialog}
-        />
-      ) : (
-        <SubjectCountdown subject={subject} />
-      )}
-
       {/* Header */}
       <div
         className="relative overflow-hidden px-4 py-12"
@@ -988,6 +976,20 @@ export default function SubjectPage() {
           )}
         </div>
       </div>
+
+      {subject.challengeActive &&
+      (!subject.challengeStartDate || now >= new Date(subject.challengeStartDate).getTime()) ? (
+        <div className="pt-8">
+          <ChallengeSection
+            subject={subject}
+            isAdmin={isAdmin}
+            hasSubjectAccess={hasSubjectAccess}
+            onOpenAccess={openAccessDialog}
+          />
+        </div>
+      ) : (
+        <SubjectCountdown subject={subject} />
+      )}
 
       {/* Content */}
       <div className="container mx-auto max-w-5xl px-4 py-8"

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Trophy, Crown, BookOpen } from "lucide-react";
 import { iconMap } from "@/lib/constants";
@@ -37,9 +37,57 @@ export default function HomeChallenge({ subjects }: { subjects: Subject[] }) {
     }))
     .filter((g) => g.top.length > 0);
 
-  const globalTop = [...medals]
-    .sort((a, b) => b.lastScore - a.lastScore || b.totalMedals - a.totalMedals)
-    .slice(0, 5);
+  const globalTop = useMemo(() => {
+    const byUser: Record<
+      string,
+      { username: string; studentName: string; best: number; attempts: number; last: number }
+    > = {};
+    for (const r of allResults) {
+      const cur = byUser[r.username];
+      if (!cur) {
+        byUser[r.username] = {
+          username: r.username,
+          studentName: r.studentName,
+          best: r.score,
+          attempts: 1,
+          last: new Date(r.updatedAt).getTime(),
+        };
+      } else {
+        cur.best = Math.max(cur.best, r.score);
+        cur.attempts += 1;
+        cur.last = Math.max(cur.last, new Date(r.updatedAt).getTime());
+      }
+    }
+    return Object.values(byUser)
+      .sort((a, b) => b.best - a.best || b.last - a.last)
+      .slice(0, 5);
+  }, [allResults]);
+
+  const medalByUser = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const m of medals) map[m.username] = m.totalMedals;
+    return map;
+  }, [medals]);
+
+  const subjectNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const s of subjects) map[s.id] = s.name;
+    return map;
+  }, [subjects]);
+
+  const bestSubjectByUser = useMemo(() => {
+    const map: Record<string, string> = {};
+    const bestScore: Record<string, number> = {};
+    for (const r of allResults) {
+      const name = subjectNameById[r.subjectId];
+      if (!name) continue;
+      if (bestScore[r.username] === undefined || r.score > bestScore[r.username]) {
+        bestScore[r.username] = r.score;
+        map[r.username] = name;
+      }
+    }
+    return map;
+  }, [allResults, subjectNameById]);
 
   const hasData = activeSubjects.length > 0 || hallOfFame.length > 0 || globalTop.length > 0;
   if (!hasData) return null;
@@ -49,13 +97,13 @@ export default function HomeChallenge({ subjects }: { subjects: Subject[] }) {
     subjectId: "",
     username: m.username,
     studentName: m.studentName || m.username,
-    score: m.lastScore,
+    score: m.best,
     correctCount: 0,
     totalQuestions: 1,
-    attempts: 1,
+    attempts: m.attempts,
     bestAttempt: 1,
-    medal: m.totalMedals > 0 ? "gold" : undefined,
-    updatedAt: m.lastUpdatedAt,
+    medal: (medalByUser[m.username] || 0) > 0 ? "gold" : undefined,
+    updatedAt: new Date(m.last).toISOString(),
   }));
 
   return (
@@ -82,8 +130,9 @@ export default function HomeChallenge({ subjects }: { subjects: Subject[] }) {
                 results={pseudoResults}
                 subjectColor={GOLD}
                 showMedalCounts
-                medalCounts={Object.fromEntries(medals.map((m) => [m.username, m.totalMedals]))}
+                medalCounts={medalByUser}
                 hideAttemptNote
+                subjectNamesByUser={bestSubjectByUser}
               />
             </div>
           )}
