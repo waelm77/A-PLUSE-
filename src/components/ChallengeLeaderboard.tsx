@@ -97,13 +97,13 @@ export default function ChallengeLeaderboard({
           ))}
         </div>
         {/* Bars */}
-        <div className="absolute inset-0 flex items-end justify-around gap-2 px-3">
+        <div className="absolute inset-0 grid grid-cols-5 gap-1 px-1">
           {top.map((r, i) => {
             const meta = rankMeta(i);
             const barColor = i < 3 ? meta.color : subjectColor;
             const height = Math.max(8, (r.score / maxScore) * 100);
             return (
-              <div key={r.id} className="flex flex-1 flex-col items-center justify-end h-full">
+              <div key={r.id} className="flex h-full flex-col items-center justify-end">
                 <span className="mb-1 text-xs font-black tabular-nums" style={{ color: barColor }}>
                   {r.score}%
                 </span>
