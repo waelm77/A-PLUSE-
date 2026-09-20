@@ -175,9 +175,7 @@ export default function ChallengeSection({
                 </div>
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-2xl sm:text-3xl font-black" style={{ color: subject.color }}>
-                      {subject.challengeTitle?.trim() || "ساحة التحدي"}
-                    </h2>
+                    <h2 className="text-2xl sm:text-3xl font-black text-gradient">ساحة التحدي</h2>
                     <span
                       className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold text-white shadow"
                       style={{ backgroundColor: subject.color }}
@@ -186,7 +184,7 @@ export default function ChallengeSection({
                       اختبارات التحدي
                     </span>
                   </div>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="mt-1.5 text-[13px] font-semibold text-foreground/80">
                     {ended ? "انتهى التحدي — إليك أبطال التحدي" : `الأفضل تسجل أسماؤهم في لوحة الشرف`}
                   </p>
                 </div>
