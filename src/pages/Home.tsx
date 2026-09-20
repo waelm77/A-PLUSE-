@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, MessageCircle, Send } from "lucide-react";
 import toast from "react-hot-toast";
-import { subscribeSubjects, createSubject, trackVisit, getDeviceId, getVisibleSubjects } from "@/services/firestore";
+import { subscribeSubjects, createSubject, trackVisit, getDeviceId, getVisibleSubjects, reorderSubjects } from "@/services/firestore";
 import { AVAILABLE_ICONS, COLORS } from "@/lib/constants";
 import type { Subject } from "@/types";
 
@@ -30,6 +30,7 @@ export default function Home() {
   }, []);
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [dragId, setDragId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -113,6 +114,38 @@ export default function Home() {
     }
   };
 
+  const handleDragStart = (id: string) => {
+    if (!isAdmin) return;
+    setDragId(id);
+  };
+
+  const handleDrop = (targetId: string) => {
+    if (!isAdmin || !dragId || dragId === targetId) {
+      setDragId(null);
+      return;
+    }
+    const from = subjects.findIndex((s) => s.id === dragId);
+    const to = subjects.findIndex((s) => s.id === targetId);
+    if (from < 0 || to < 0) {
+      setDragId(null);
+      return;
+    }
+    const next = [...subjects];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setSubjects(next);
+    try {
+      localStorage.setItem("a-plus-subjects", JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+    const orderedIds = next.map((s) => s.id);
+    reorderSubjects(orderedIds)
+      .then(() => toast.success("تم حفظ ترتيب المواد"))
+      .catch(() => toast.error("حدث خطأ في حفظ الترتيب"));
+    setDragId(null);
+  };
+
   return (
     <div className="min-h-screen bg-background bg-grid">
       <Navbar />
@@ -146,7 +179,12 @@ export default function Home() {
           <TickerBar />
         </div>
         <div className="mb-8 flex items-center justify-between">
-          <h2 className="text-3xl font-bold">المواد الدراسية</h2>
+          <div>
+            <h2 className="text-3xl font-bold">المواد الدراسية</h2>
+            {isAdmin && (
+              <p className="mt-1 text-sm text-muted-foreground">اسحب وأفلت أيقونات المواد لإعادة ترتيبها</p>
+            )}
+          </div>
           {isAdmin && (
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
@@ -236,7 +274,18 @@ export default function Home() {
         ) : subjects.length > 0 ? (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {subjects.map((subject) => (
-              <SubjectCard key={subject.id} subject={subject} />
+              <div
+                key={subject.id}
+                draggable={isAdmin}
+                onDragStart={() => handleDragStart(subject.id)}
+                onDragOver={(e) => {
+                  if (isAdmin) e.preventDefault();
+                }}
+                onDrop={() => handleDrop(subject.id)}
+                className={isAdmin ? "cursor-grab active:cursor-grabbing" : ""}
+              >
+                <SubjectCard subject={subject} />
+              </div>
             ))}
           </div>
         ) : (

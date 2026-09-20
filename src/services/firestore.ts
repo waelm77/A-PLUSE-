@@ -578,6 +578,23 @@ export function getVisibleSubjects(subjects: Subject[]): Subject[] {
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
+// Persists a new display order for a list of subject ids (index = order).
+export async function reorderSubjects(orderedIds: string[]): Promise<void> {
+  if (useLocalStorage) {
+    const items = getLocalItems<Subject>("subjects");
+    const byId = new Map(items.map((s) => [s.id, s]));
+    const ordered = orderedIds.map((id) => byId.get(id)).filter(Boolean) as Subject[];
+    const rest = items.filter((s) => !orderedIds.includes(s.id));
+    setLocalItems("subjects", [...ordered, ...rest].map((s, i) => ({ ...s, order: i })));
+    return;
+  }
+  const batch = writeBatch(db);
+  orderedIds.forEach((id, index) => {
+    batch.update(doc(db, "subjects", id), { order: index });
+  });
+  await batch.commit();
+}
+
 // Files
 export async function getAllFiles(): Promise<FileItem[]> {
   if (useLocalStorage) {
