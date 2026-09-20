@@ -70,7 +70,7 @@ export default function HomeChallenge({ subjects }: { subjects: Subject[] }) {
             </div>
             <div>
               <h2 className="text-xl sm:text-2xl font-black text-foreground">ساحة التحدي</h2>
-              <p className="text-sm text-muted-foreground">أفضل 5 على مستوى المنصة — يُحدَّث تلقائياً بعد كل اختبار</p>
+              <p className="text-sm text-muted-foreground">أفضل 5 على مستوى المنصة</p>
             </div>
           </div>
 

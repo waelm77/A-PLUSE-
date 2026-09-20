@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 import {
   Trophy,
+  ClipboardList,
   Play,
   Lock,
   Clock,
@@ -58,9 +59,7 @@ function ChallengeCountdown({ endDate }: { endDate: string }) {
       {units.map((u) => (
         <div key={u.label} className="flex flex-col items-center">
           <div className="glass rounded-xl px-3 py-2 min-w-[56px] text-center">
-            <span className="text-2xl font-black tabular-nums">
-              {String(u.value).padStart(2, "0")}
-            </span>
+            <span className="text-2xl font-black tabular-nums text-white">{String(u.value).padStart(2, "0")}</span>
           </div>
           <span className="text-[10px] text-muted-foreground mt-1">{u.label}</span>
         </div>
@@ -167,29 +166,40 @@ export default function ChallengeSection({
         />
         <div className="relative z-10">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
-            <div className="flex items-center gap-3">
-              <div
-                className="flex h-12 w-12 items-center justify-center rounded-2xl shadow-lg"
-                style={{ backgroundColor: subject.color, boxShadow: `0 6px 20px ${subject.color}66` }}
-              >
-                <Trophy className="h-6 w-6 text-white" fill="currentColor" />
-              </div>
-              <div>
-                <h2 className="text-2xl sm:text-3xl font-black" style={{ color: subject.color }}>
-                  {subject.challengeTitle?.trim() || "ساحة التحدي"}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  {ended ? "انتهى التحدي — إليك أبطال التحدي" : `الأفضل يسجلون أسمائهم في لوحة الشرف`}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {endDate && !ended && (
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-bold">الوقت المتبقي على الانتهاء</span>
+<div className="flex items-center gap-3">
+                <div
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl shadow-lg"
+                  style={{ backgroundColor: subject.color, boxShadow: `0 6px 20px ${subject.color}66` }}
+                >
+                  <Trophy className="h-6 w-6 text-white" fill="currentColor" />
                 </div>
-              )}
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-2xl sm:text-3xl font-black" style={{ color: subject.color }}>
+                      {subject.challengeTitle?.trim() || "ساحة التحدي"}
+                    </h2>
+                    <span
+                      className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold text-white shadow"
+                      style={{ backgroundColor: subject.color }}
+                    >
+                      <ClipboardList className="h-3.5 w-3.5" />
+                      اختبارات التحدي
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {ended ? "انتهى التحدي — إليك أبطال التحدي" : `الأفضل تسجل أسماؤهم في لوحة الشرف`}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {endDate && !ended && (
+                  <div className="flex items-center gap-2 rounded-full bg-foreground/5 px-3 py-1.5">
+                    <Clock className="h-4 w-4" style={{ color: subject.color }} />
+                    <span className="text-sm font-black" style={{ color: subject.color }}>
+                      الوقت المتبقي على الانتهاء
+                    </span>
+                  </div>
+                )}
               {ended && endDate && (
                 <span className="rounded-full bg-red-500/15 px-3 py-1 text-sm font-bold text-red-600">
                   انتهى التحدي
@@ -336,7 +346,6 @@ export default function ChallengeSection({
             <div className="mb-3 flex items-center gap-2">
               <RefreshCw className="h-4 w-4 text-muted-foreground" />
               <h3 className="text-lg font-black">{rankTitle}</h3>
-              <span className="text-xs text-muted-foreground">(يُحدَّث تلقائياً بعد كل اختبار)</span>
             </div>
             <ChallengeLeaderboard
               results={results}
