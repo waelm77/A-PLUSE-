@@ -85,92 +85,94 @@ export default function ChallengeLeaderboard({
   return (
     <div>
       <div dir="ltr" className="w-full overflow-x-auto scrollbar-hide">
-        <div className="relative min-w-[420px]" style={{ height: 220 }}>
-          {/* Y axis gridlines */}
-          <div className="absolute inset-0 flex flex-col justify-between pb-2">
-            {[100, 75, 50, 25, 0].map((v) => (
-              <div key={v} className="relative flex items-center">
-                <div className="w-full border-t border-dashed border-border" />
-                <span className="absolute -left-2 -translate-x-full text-[10px] text-muted-foreground tabular-nums">
-                  {v}
-                </span>
-              </div>
-            ))}
+        <div className="min-w-[420px]">
+          <div className="relative" style={{ height: 220 }}>
+            {/* Y axis gridlines */}
+            <div className="absolute inset-0 flex flex-col justify-between pb-2">
+              {[100, 75, 50, 25, 0].map((v) => (
+                <div key={v} className="relative flex items-center">
+                  <div className="w-full border-t border-dashed border-border" />
+                  <span className="absolute -left-2 -translate-x-full text-[10px] text-muted-foreground tabular-nums">
+                    {v}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {/* Bars */}
+            <div
+              className="absolute inset-0 flex items-end justify-around gap-2 px-6"
+              style={{ paddingBottom: 0 }}
+            >
+              {top.map((r, i) => {
+                const meta = rankMeta(i);
+                const barColor = i < 3 ? meta.color : subjectColor;
+                const height = Math.max(8, (r.score / maxScore) * 100);
+                return (
+                  <div key={r.id} className="flex flex-1 flex-col items-center justify-end h-full">
+                    <span className="mb-1 text-sm font-black tabular-nums" style={{ color: barColor }}>
+                      {r.score}%
+                    </span>
+                    <div
+                      className="w-full max-w-[48px] rounded-t-md transition-all"
+                      style={{
+                        height: `${height}%`,
+                        backgroundColor: i < 3 ? `color-mix(in srgb, ${barColor} 88%, white)` : subjectColor + "66",
+                        boxShadow: i < 3 ? `0 -2px 12px ${barColor}55` : "none",
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          {/* Bars */}
-          <div
-            className="absolute inset-0 flex items-end justify-around gap-2 px-6"
-            style={{ paddingBottom: 0 }}
-          >
+
+          {/* Names / medals row */}
+          <div className="mt-3 flex gap-2 px-6">
             {top.map((r, i) => {
               const meta = rankMeta(i);
-              const barColor = i < 3 ? meta.color : subjectColor;
-              const height = Math.max(8, (r.score / maxScore) * 100);
               return (
-                <div key={r.id} className="flex flex-1 flex-col items-center justify-end h-full">
-                  <span className="mb-1 text-sm font-black tabular-nums" style={{ color: barColor }}>
-                    {r.score}%
-                  </span>
+                <div key={r.id} className="flex flex-1 flex-col items-center gap-1">
                   <div
-                    className="w-full max-w-[48px] rounded-t-md transition-all"
+                    className="flex h-9 w-9 items-center justify-center rounded-full shadow-md"
                     style={{
-                      height: `${height}%`,
-                      backgroundColor: i < 3 ? `color-mix(in srgb, ${barColor} 88%, white)` : subjectColor + "66",
-                      boxShadow: i < 3 ? `0 -2px 12px ${barColor}55` : "none",
+                      backgroundColor: meta.color,
+                      boxShadow: meta.isCertificate ? `0 0 0 3px ${meta.color}33` : `0 2px 8px ${meta.color}66`,
                     }}
-                  />
+                  >
+                    {meta.icon}
+                    <span className="sr-only">{meta.label}</span>
+                  </div>
+                  <span className="max-w-full truncate text-xs font-bold">{r.studentName}</span>
+                  {(subjectNamesByUser
+                    ? subjectNamesByUser[r.username] ?? subjectNamesByUser[r.studentName]
+                    : defaultSubjectName) && (
+                    <span
+                      className="max-w-full truncate text-[10px] font-bold"
+                      style={{ color: subjectColor }}
+                    >
+                      تفوق في {subjectNamesByUser
+                        ? subjectNamesByUser[r.username] ?? subjectNamesByUser[r.studentName]
+                        : defaultSubjectName}
+                    </span>
+                  )}
+                  {!hideAttemptNote && (
+                    <span className="text-[10px] text-muted-foreground">{attemptNote(r)}</span>
+                  )}
+                  {showMedalCounts && medalCounts && medalCounts[r.username] ? (
+                    <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-600">
+                      <Star className="h-3 w-3" fill="currentColor" />
+                      {medalCounts[r.username]} ميدالية
+                    </span>
+                  ) : showMedalCounts ? (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                      بلا ميداليات
+                    </span>
+                  ) : null}
                 </div>
               );
             })}
           </div>
         </div>
-      </div>
-
-      {/* Names / medals row */}
-      <div dir="ltr" className="mt-3 flex gap-2 px-6">
-        {top.map((r, i) => {
-          const meta = rankMeta(i);
-          return (
-            <div key={r.id} className="flex flex-1 flex-col items-center gap-1">
-              <div
-                className="flex h-9 w-9 items-center justify-center rounded-full shadow-md"
-                style={{
-                  backgroundColor: meta.color,
-                  boxShadow: meta.isCertificate ? `0 0 0 3px ${meta.color}33` : `0 2px 8px ${meta.color}66`,
-                }}
-              >
-                {meta.icon}
-                <span className="sr-only">{meta.label}</span>
-              </div>
-              <span className="max-w-full truncate text-xs font-bold">{r.studentName}</span>
-              {(subjectNamesByUser
-                ? subjectNamesByUser[r.username] ?? subjectNamesByUser[r.studentName]
-                : defaultSubjectName) && (
-                <span
-                  className="max-w-full truncate text-[10px] font-bold"
-                  style={{ color: subjectColor }}
-                >
-                  تفوق في {subjectNamesByUser
-                    ? subjectNamesByUser[r.username] ?? subjectNamesByUser[r.studentName]
-                    : defaultSubjectName}
-                </span>
-              )}
-              {!hideAttemptNote && (
-                <span className="text-[10px] text-muted-foreground">{attemptNote(r)}</span>
-              )}
-              {showMedalCounts && medalCounts && medalCounts[r.username] ? (
-                <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-600">
-                  <Star className="h-3 w-3" fill="currentColor" />
-                  {medalCounts[r.username]} ميدالية
-                </span>
-              ) : showMedalCounts ? (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                  بلا ميداليات
-                </span>
-              ) : null}
-            </div>
-          );
-        })}
       </div>
     </div>
   );

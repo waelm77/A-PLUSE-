@@ -41,7 +41,7 @@ export default function HomeChallenge({ subjects }: { subjects: Subject[] }) {
             </div>
           </div>
 
-          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-3 lg:grid-cols-4">
             {activeSubjects.map((s) => {
               const Icon = iconMap[s.icon] || BookOpen;
               return (
@@ -59,11 +59,11 @@ export default function HomeChallenge({ subjects }: { subjects: Subject[] }) {
                     >
                       <Icon className="h-6 w-6" />
                     </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-black" style={{ color: s.color }}>
+                    <div>
+                      <p className="break-words text-sm font-black sm:text-base" style={{ color: s.color }}>
                         {s.name}
                       </p>
-                      <p className="text-[10px] text-muted-foreground">شارك في التحدي الآن</p>
+                      <p className="break-words text-xs text-muted-foreground">شارك في التحدي الآن</p>
                     </div>
                   </div>
                 </Link>
