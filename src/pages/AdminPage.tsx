@@ -49,6 +49,7 @@ import {
   TrendingUp,
   Copy,
   Sparkles,
+  Trophy,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useTrialStore } from "@/store/trialStore";
@@ -138,6 +139,9 @@ export default function AdminPage() {
     countdownActive: false,
     countdownTitle: "الفترة التجريبية تنتهي خلال",
     countdownEndDate: "",
+    challengeActive: false,
+    challengeTitle: "",
+    challengeEndDate: "",
   });
 
   // ─── Ticker handlers ──
@@ -333,10 +337,13 @@ export default function AdminPage() {
         countdownActive: subject.countdownActive || false,
         countdownTitle: subject.countdownTitle || "الفترة التجريبية تنتهي خلال",
         countdownEndDate: subject.countdownEndDate || "",
+        challengeActive: subject.challengeActive || false,
+        challengeTitle: subject.challengeTitle || "",
+        challengeEndDate: subject.challengeEndDate || "",
       });
     } else {
       setEditingSubject(null);
-      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px", countdownActive: false, countdownTitle: "الفترة التجريبية تنتهي خلال", countdownEndDate: "" });
+      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px", countdownActive: false, countdownTitle: "الفترة التجريبية تنتهي خلال", countdownEndDate: "", challengeActive: false, challengeTitle: "", challengeEndDate: "" });
     }
     setOpen(true);
   };
@@ -361,6 +368,9 @@ export default function AdminPage() {
         countdownActive: form.countdownActive,
         countdownTitle: form.countdownTitle.trim() || "الفترة التجريبية تنتهي خلال",
         countdownEndDate: form.countdownActive ? form.countdownEndDate : "",
+        challengeActive: form.challengeActive,
+        challengeTitle: form.challengeTitle.trim() || "منصة التحدي",
+        challengeEndDate: form.challengeActive ? form.challengeEndDate : "",
       };
       if (editingSubject) {
         await updateSubject(editingSubject.id, subjectData);
@@ -371,7 +381,7 @@ export default function AdminPage() {
       }
       setOpen(false);
       setEditingSubject(null);
-      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px", countdownActive: false, countdownTitle: "الفترة التجريبية تنتهي خلال", countdownEndDate: "" });
+      setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px", countdownActive: false, countdownTitle: "الفترة التجريبية تنتهي خلال", countdownEndDate: "", challengeActive: false, challengeTitle: "", challengeEndDate: "" });
       await loadSubjects();
     } catch {
       toast.error(editingSubject ? "حدث خطأ أثناء التعديل" : "حدث خطأ أثناء الإضافة");
@@ -950,6 +960,67 @@ export default function AdminPage() {
                                   })}
                                 </p>
                               )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* ── Challenge settings for this subject ── */}
+                      <div className="space-y-4 rounded-lg border p-4">
+                        <p className="text-sm font-bold text-muted-foreground flex items-center gap-2">
+                          <Trophy className="h-4 w-4" /> منصة التحدي لهذه المادة
+                        </p>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            id="subject-challenge-active"
+                            checked={form.challengeActive}
+                            onChange={(e) => setForm({ ...form, challengeActive: e.target.checked })}
+                            className="w-4 h-4 rounded border-gray-300"
+                          />
+                          <Label htmlFor="subject-challenge-active" className="mb-0">
+                            تفعيل التحدي في صفحة المادة (يحل محل العد التنازلي)
+                          </Label>
+                        </div>
+
+                        {form.challengeActive && (
+                          <>
+                            <div>
+                              <Label>عنوان التحدي</Label>
+                              <Input
+                                value={form.challengeTitle}
+                                onChange={(e) => setForm({ ...form, challengeTitle: e.target.value })}
+                                placeholder="مثال: التحدي الأسبوعي"
+                                className="mt-2"
+                              />
+                            </div>
+                            <div>
+                              <Label>موعد انتهاء التحدي (يُغلَق تلقائياً ويظهر لوحة الشرف)</Label>
+                              <input
+                                type="datetime-local"
+                                value={form.challengeEndDate ? form.challengeEndDate.slice(0, 16) : ""}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setForm({ ...form, challengeEndDate: val ? new Date(val).toISOString() : "" });
+                                }}
+                                className="mt-2 flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                dir="ltr"
+                              />
+                              {form.challengeEndDate && (
+                                <p className="text-sm font-bold text-primary mt-2 flex items-center gap-2">
+                                  <Calendar className="h-4 w-4" />
+                                  {new Date(form.challengeEndDate).toLocaleString("ar-SA", {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </p>
+                              )}
+                              <p className="text-xs text-muted-foreground mt-1">
+                                بعد هذا الموعد يتوقف قبول المحاولات وتُعرض نتائج الأفضل 5 ثابتة في "لوحة الشرف".
+                              </p>
                             </div>
                           </>
                         )}

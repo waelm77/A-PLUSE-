@@ -20,7 +20,7 @@ import {
 } from "firebase/firestore";
 import type { DocumentSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo, Ticker, Admin, DailyVisit, VideoStats } from "../types";
+import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo, Ticker, Admin, DailyVisit, VideoStats, Quiz, QuizResult, StudentMedals, Medal } from "../types";
 
 const useLocalStorage = false;
 
@@ -1328,4 +1328,275 @@ export async function resetStats(): Promise<void> {
     lastDoc = snap.docs[snap.docs.length - 1];
     if (snap.docs.length < pageSize) remaining = false;
   }
+}
+
+// ─── Challenge (منصة التحدي) ──────────────────────────────────
+
+export const MAX_QUIZ_ATTEMPTS = 2;
+
+function quizResultFromDoc(d: DocumentSnapshot): QuizResult {
+  const data = d.data()!;
+  return {
+    id: d.id,
+    ...data,
+    score: Number(data.score) || 0,
+    correctCount: Number(data.correctCount) || 0,
+    totalQuestions: Number(data.totalQuestions) || 0,
+    attempts: Number(data.attempts) || 0,
+    bestAttempt: Number(data.bestAttempt) || 0,
+    updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+  } as QuizResult;
+}
+
+export function subscribeQuizzesBySubject(
+  subjectId: string,
+  onData: (items: Quiz[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  const q = query(collection(db, "quizzes"), where("subjectId", "==", subjectId));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      onData(
+        snapshot.docs
+          .map((d) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              ...data,
+              createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+            } as Quiz;
+          })
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      );
+    },
+    (err) => onError?.(err)
+  );
+}
+
+export function subscribeQuizResults(
+  subjectId: string,
+  onData: (items: QuizResult[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  const q = query(collection(db, "quizResults"), where("subjectId", "==", subjectId));
+  return onSnapshot(
+    q,
+    (snapshot) => onData(snapshot.docs.map(quizResultFromDoc)),
+    (err) => onError?.(err)
+  );
+}
+
+export function subscribeAllQuizResults(
+  onData: (items: QuizResult[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  return onSnapshot(
+    collection(db, "quizResults"),
+    (snapshot) => onData(snapshot.docs.map(quizResultFromDoc)),
+    (err) => onError?.(err)
+  );
+}
+
+export function subscribeStudentMedals(
+  onData: (items: StudentMedals[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  return onSnapshot(
+    collection(db, "studentMedals"),
+    (snapshot) => onData(
+      snapshot.docs.map((d) => {
+        const data = d.data();
+        return {
+          username: d.id,
+          ...data,
+          gold: Number(data.gold) || 0,
+          silver: Number(data.silver) || 0,
+          bronze: Number(data.bronze) || 0,
+          totalMedals: Number(data.totalMedals) || 0,
+          lastScore: Number(data.lastScore) || 0,
+          lastUpdatedAt: data.lastUpdatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+        } as StudentMedals;
+      })
+    ),
+    (err) => onError?.(err)
+  );
+}
+
+/**
+ * Sort rule for leaderboards:
+ *  1) highest best-score,
+ *  2) fewer attempts to reach it (first-attempt wins ties),
+ *  3) earliest achieved.
+ */
+export function compareQuizResults(a: QuizResult, b: QuizResult): number {
+  if (b.score !== a.score) return b.score - a.score;
+  if ((a.bestAttempt || 1) !== (b.bestAttempt || 1)) return (a.bestAttempt || 1) - (b.bestAttempt || 1);
+  return (a.updatedAt || "").localeCompare(b.updatedAt || "");
+}
+
+/**
+ * Rank the given subject results and write their medal fields back.
+ * Returns the updated results (with medals) — also updates studentMedals counters.
+ */
+async function recomputeMedals(_subjectId: string, results: QuizResult[]): Promise<QuizResult[]> {
+  const sorted = [...results].sort(compareQuizResults);
+  const newMedals = new Map<string, Medal | undefined>();
+  const medalOf = (index: number): Medal | undefined =>
+    index === 0 ? "gold" : index === 1 ? "silver" : index === 2 ? "bronze" : undefined;
+
+  sorted.forEach((r, i) => newMedals.set(r.username, medalOf(i)));
+
+  const batch = writeBatch(db);
+  for (const r of results) {
+    const next = newMedals.get(r.username);
+    if (r.medal !== next) {
+      batch.update(doc(db, "quizResults", r.id), { medal: next ?? null });
+    }
+  }
+
+  // Rebuild the affected students' medal counters (simple & consistent).
+  const affected = new Set(results.map((r) => r.username));
+  const counterSnaps = await Promise.all(
+    [...affected].map((u) => getDoc(doc(db, "studentMedals", u)))
+  );
+  const counterData = new Map<string, { gold: number; silver: number; bronze: number }>();
+  counterSnaps.forEach((snap, i) => {
+    const username = [...affected][i];
+    const data = snap.data();
+    counterData.set(username, {
+      gold: Number(data?.gold) || 0,
+      silver: Number(data?.silver) || 0,
+      bronze: Number(data?.bronze) || 0,
+    });
+  });
+  for (const r of results) {
+    const medal = newMedals.get(r.username);
+    const counts = { ...counterData.get(r.username)! };
+    if (medal !== r.medal) {
+      if (r.medal) counts[r.medal] = Math.max(0, counts[r.medal] - 1);
+      if (medal) counts[medal] = counts[medal] + 1;
+    }
+    counterData.set(r.username, counts);
+  }
+  for (const [username, counts] of counterData) {
+    batch.set(
+      doc(db, "studentMedals", username),
+      { ...counts, totalMedals: counts.gold + counts.silver + counts.bronze },
+      { merge: true }
+    );
+  }
+
+  await batch.commit();
+  return sorted.map((r) => ({ ...r, medal: newMedals.get(r.username) }));
+}
+
+export async function submitQuizResult(input: {
+  subjectId: string;
+  username: string;
+  studentName: string;
+  score: number;
+  correctCount: number;
+  totalQuestions: number;
+}): Promise<{ result: QuizResult; attempt: number; saved: boolean }> {
+  const resultId = `${input.subjectId}_${input.username}`;
+  const ref = doc(db, "quizResults", resultId);
+  const existingSnap = await getDoc(ref);
+  const existing = existingSnap.exists() ? quizResultFromDoc(existingSnap) : null;
+
+  if (existing && existing.attempts >= MAX_QUIZ_ATTEMPTS) {
+    return { result: existing, attempt: existing.attempts, saved: false };
+  }
+
+  const attempt = (existing?.attempts || 0) + 1;
+  const improved = !existing || input.score > existing.score;
+  const bestScore = improved ? input.score : existing!.score;
+  const bestAttempt = improved ? attempt : existing!.bestAttempt;
+
+  await setDoc(
+    ref,
+    {
+      subjectId: input.subjectId,
+      username: input.username,
+      studentName: input.studentName,
+      score: bestScore,
+      correctCount: improved ? input.correctCount : existing!.correctCount,
+      totalQuestions: input.totalQuestions,
+      attempts: attempt,
+      bestAttempt,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  // Keep the "آخر اختبار" score for the global leaderboard.
+  await setDoc(
+    doc(db, "studentMedals", input.username),
+    {
+      username: input.username,
+      studentName: input.studentName,
+      lastScore: input.score,
+      lastUpdatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  // Recompute the subject podium + medal counters.
+  const subjectSnap = await getDocs(
+    query(collection(db, "quizResults"), where("subjectId", "==", input.subjectId))
+  );
+  const subjectResults = subjectSnap.docs.map(quizResultFromDoc);
+  await recomputeMedals(input.subjectId, subjectResults);
+
+  const fresh = await getDoc(ref);
+  const finalResult = fresh.exists() ? quizResultFromDoc(fresh) : {
+    id: resultId,
+    subjectId: input.subjectId,
+    username: input.username,
+    studentName: input.studentName,
+    score: bestScore,
+    correctCount: improved ? input.correctCount : existing!.correctCount,
+    totalQuestions: input.totalQuestions,
+    attempts: attempt,
+    bestAttempt,
+    updatedAt: new Date().toISOString(),
+  } as QuizResult;
+
+  return { result: finalResult, attempt, saved: true };
+}
+
+export async function createQuiz(data: Omit<Quiz, "id" | "createdAt">): Promise<Quiz> {
+  const quizzesCol = collection(db, "quizzes");
+  const ref = doc(quizzesCol);
+  const counterRef = doc(db, "counters", `quizzes:${data.subjectId}`);
+  const order = await runTransaction(db, async (tx) => {
+    const counter = await tx.get(counterRef);
+    const next = (counter.data()?.value as number ?? 0) + 1;
+    tx.set(counterRef, { value: next });
+    tx.set(ref, {
+      ...data,
+      isFree: data.isFree ?? true,
+      order: next,
+      createdAt: serverTimestamp(),
+    });
+    return next;
+  });
+  return { id: ref.id, ...data, isFree: data.isFree ?? true, order, createdAt: new Date().toISOString() };
+}
+
+export async function updateQuiz(id: string, data: Partial<Omit<Quiz, "id" | "createdAt">>): Promise<void> {
+  await updateDoc(doc(db, "quizzes", id), data);
+}
+
+export async function deleteQuiz(id: string): Promise<void> {
+  await deleteDoc(doc(db, "quizzes", id));
+  await assertDeleted("quizzes", id);
+}
+
+export async function toggleQuizFree(id: string, isFree: boolean): Promise<void> {
+  await updateDoc(doc(db, "quizzes", id), { isFree });
+}
+
+export async function toggleQuizHidden(id: string, isHidden: boolean): Promise<void> {
+  await updateDoc(doc(db, "quizzes", id), { isHidden });
 }

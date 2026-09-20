@@ -15,7 +15,7 @@ function getTimeLeft(endDate: string) {
   };
 }
 
-function CountdownBox({
+export function CountdownBox({
   title,
   endDate,
   expiredTitle,

@@ -16,6 +16,9 @@ export interface Subject {
   countdownActive?: boolean;
   countdownTitle?: string;
   countdownEndDate?: string;
+  challengeActive?: boolean;
+  challengeTitle?: string;
+  challengeEndDate?: string;
   isHidden?: boolean;
 }
 
@@ -60,6 +63,53 @@ export interface Assessment {
   createdAt: string;
   order?: number;
   isHidden?: boolean;
+}
+
+// ─── Challenge (منصة التحدي) ────────────────────────────────
+
+export interface QuizQuestion {
+  text: string;
+  options: string[]; // 2..4
+  correctText: string; // matched by text, not index
+}
+
+export interface Quiz {
+  id: string;
+  subjectId: string;
+  title: string;
+  description?: string;
+  questions: QuizQuestion[];
+  isFree?: boolean;
+  isHidden?: boolean;
+  createdAt: string;
+  order?: number;
+}
+
+export type Medal = "gold" | "silver" | "bronze";
+
+export interface QuizResult {
+  id: string; // `${subjectId}_${username}`
+  subjectId: string;
+  username: string;
+  studentName: string;
+  score: number; // percent 0..100 (best)
+  correctCount: number;
+  totalQuestions: number;
+  attempts: number; // 1..2
+  bestAttempt: number; // the attempt that produced the best score
+  medal?: Medal;
+  updatedAt: string;
+}
+
+export interface StudentMedals {
+  username: string;
+  studentName: string;
+  gold: number;
+  silver: number;
+  bronze: number;
+  totalMedals: number;
+  lastScore: number; // score of the most recent submission
+  lastUpdatedAt: string;
 }
 
 export interface UserProgress {

@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import TickerBar from "@/components/TickerBar";
 import { SubjectCountdown } from "@/components/TrialCountdown";
+import ChallengeSection from "@/components/ChallengeSection";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -748,7 +749,16 @@ export default function SubjectPage() {
     <div className="min-h-screen bg-white">
       <Navbar />
 
-      <SubjectCountdown subject={subject} />
+      {subject.challengeActive ? (
+        <ChallengeSection
+          subject={subject}
+          isAdmin={isAdmin}
+          hasSubjectAccess={hasSubjectAccess}
+          onOpenAccess={openAccessDialog}
+        />
+      ) : (
+        <SubjectCountdown subject={subject} />
+      )}
 
       {/* Header */}
       <div

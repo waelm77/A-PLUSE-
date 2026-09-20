@@ -68,6 +68,23 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ─── CHALLENGE (quizzes + leaderboards) ───────────────────
+    // quizzes: public read, admin write. quizResults / studentMedals:
+    // public read (leaderboards) + open write (students authenticate
+    // in-app without Firebase Auth — same trust level as /students).
+    match /quizzes/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /quizResults/{doc} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /studentMedals/{doc} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     // ─── COUNTERS (atomic order counters per subject) ──────────
     // Read/write admin only.
     match /counters/{key} {
