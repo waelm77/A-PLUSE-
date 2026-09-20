@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Trophy, Crown } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Trophy, Crown, BookOpen } from "lucide-react";
+import { iconMap } from "@/lib/constants";
 import { subscribeAllQuizResults, subscribeStudentMedals, compareQuizResults } from "@/services/firestore";
 import ChallengeLeaderboard from "@/components/ChallengeLeaderboard";
 import type { Subject, QuizResult, StudentMedals } from "@/types";
@@ -87,10 +89,41 @@ export default function HomeChallenge({ subjects }: { subjects: Subject[] }) {
           )}
 
           {activeSubjects.length > 0 && (
-            <p className="mt-4 flex items-center gap-2 rounded-xl bg-primary/10 px-4 py-2 text-sm font-bold text-primary">
-              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse-glow" />
-              تحديات جارية الآن: {activeSubjects.map((s) => s.name).join("، ")}
-            </p>
+            <div className="mt-4">
+              <p className="mb-2 flex items-center gap-2 font-black text-foreground">
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse-glow" />
+                تحديات جارية الآن
+              </p>
+              <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+                {activeSubjects.map((s) => {
+                  const Icon = iconMap[s.icon] || BookOpen;
+                  return (
+                    <Link key={s.id} to={`/subject/${s.id}`} className="block">
+                      <div
+                        className="flex items-center gap-3 rounded-xl border p-3 transition-transform hover:-translate-y-1 hover:shadow-lg"
+                        style={{
+                          background: `linear-gradient(135deg, ${s.color}22, ${s.color}08)`,
+                          borderColor: s.color + "55",
+                        }}
+                      >
+                        <div
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow"
+                          style={{ backgroundColor: s.color, boxShadow: `0 4px 14px ${s.color}55` }}
+                        >
+                          <Icon className="h-6 w-6" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black" style={{ color: s.color }}>
+                            {s.name}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">شارك في التحدي الآن</p>
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           )}
 
           {hallOfFame.length > 0 && (
