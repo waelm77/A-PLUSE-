@@ -1600,3 +1600,151 @@ export async function toggleQuizFree(id: string, isFree: boolean): Promise<void>
 export async function toggleQuizHidden(id: string, isHidden: boolean): Promise<void> {
   await updateDoc(doc(db, "quizzes", id), { isHidden });
 }
+
+// ─── Material quizzes (اختبارات تفاعلية من المنصة) ─────────────
+
+function materialQuizFromDoc(d: DocumentSnapshot): Quiz {
+  const data = d.data()!;
+  return {
+    id: d.id,
+    ...data,
+    createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+  } as Quiz;
+}
+
+export function subscribeMaterialQuizzesBySubject(
+  subjectId: string,
+  onData: (items: Quiz[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  const q = query(collection(db, "materialQuizzes"), where("subjectId", "==", subjectId));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      onData(
+        snapshot.docs
+          .map(materialQuizFromDoc)
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      );
+    },
+    (err) => onError?.(err)
+  );
+}
+
+export function subscribeMaterialQuizResults(
+  subjectId: string,
+  onData: (items: QuizResult[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  const q = query(collection(db, "materialQuizResults"), where("subjectId", "==", subjectId));
+  return onSnapshot(
+    q,
+    (snapshot) => onData(snapshot.docs.map(quizResultFromDoc)),
+    (err) => onError?.(err)
+  );
+}
+
+export function subscribeAllMaterialQuizResults(
+  onData: (items: QuizResult[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  return onSnapshot(
+    collection(db, "materialQuizResults"),
+    (snapshot) => onData(snapshot.docs.map(quizResultFromDoc)),
+    (err) => onError?.(err)
+  );
+}
+
+/** Unlimited attempts: keep best score, always records the newest attempt. */
+export async function submitMaterialQuizResult(input: {
+  subjectId: string;
+  username: string;
+  studentName: string;
+  score: number;
+  correctCount: number;
+  totalQuestions: number;
+}): Promise<{ result: QuizResult; attempt: number; saved: boolean }> {
+  const resultId = `${input.subjectId}_${input.username}`;
+  const ref = doc(db, "materialQuizResults", resultId);
+  const existingSnap = await getDoc(ref);
+  const existing = existingSnap.exists() ? quizResultFromDoc(existingSnap) : null;
+
+  const attempt = (existing?.attempts || 0) + 1;
+  const improved = !existing || input.score > existing.score;
+  const bestScore = improved ? input.score : existing!.score;
+  const bestAttempt = improved ? attempt : existing!.bestAttempt;
+
+  await setDoc(
+    ref,
+    {
+      subjectId: input.subjectId,
+      username: input.username,
+      studentName: input.studentName,
+      score: bestScore,
+      correctCount: improved ? input.correctCount : existing!.correctCount,
+      totalQuestions: input.totalQuestions,
+      attempts: attempt,
+      bestAttempt,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  const fresh = await getDoc(ref);
+  const finalResult = fresh.exists()
+    ? quizResultFromDoc(fresh)
+    : {
+        id: resultId,
+        subjectId: input.subjectId,
+        username: input.username,
+        studentName: input.studentName,
+        score: bestScore,
+        correctCount: improved ? input.correctCount : existing!.correctCount,
+        totalQuestions: input.totalQuestions,
+        attempts: attempt,
+        bestAttempt,
+        updatedAt: new Date().toISOString(),
+      } as QuizResult;
+
+  return { result: finalResult, attempt, saved: true };
+}
+
+export async function createMaterialQuiz(data: Omit<Quiz, "id" | "createdAt">): Promise<Quiz> {
+  const col = collection(db, "materialQuizzes");
+  const ref = doc(col);
+  const counterRef = doc(db, "counters", `materialQuizzes:${data.subjectId}`);
+  const order = await runTransaction(db, async (tx) => {
+    const counter = await tx.get(counterRef);
+    const next = (counter.data()?.value as number ?? 0) + 1;
+    tx.set(counterRef, { value: next });
+    tx.set(ref, {
+      ...data,
+      isFree: data.isFree ?? true,
+      order: next,
+      createdAt: serverTimestamp(),
+    });
+    return next;
+  });
+  return { id: ref.id, ...data, isFree: data.isFree ?? true, order, createdAt: new Date().toISOString() };
+}
+
+export async function updateMaterialQuiz(id: string, data: Partial<Omit<Quiz, "id" | "createdAt">>): Promise<void> {
+  await updateDoc(doc(db, "materialQuizzes", id), data);
+}
+
+export async function deleteMaterialQuiz(id: string): Promise<void> {
+  await deleteDoc(doc(db, "materialQuizzes", id));
+  await assertDeleted("materialQuizzes", id);
+}
+
+export async function toggleMaterialQuizFree(id: string, isFree: boolean): Promise<void> {
+  await updateDoc(doc(db, "materialQuizzes", id), { isFree });
+}
+
+export async function toggleMaterialQuizHidden(id: string, isHidden: boolean): Promise<void> {
+  await updateDoc(doc(db, "materialQuizzes", id), { isHidden });
+}
+
+export async function deleteMaterialQuizResult(resultId: string): Promise<void> {
+  await deleteDoc(doc(db, "materialQuizResults", resultId));
+}

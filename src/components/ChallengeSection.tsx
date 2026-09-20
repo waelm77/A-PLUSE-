@@ -5,8 +5,6 @@ import {
   Play,
   Lock,
   Clock,
-  CheckCircle2,
-  XCircle,
   Plus,
   Pencil,
   Trash2,
@@ -16,16 +14,10 @@ import {
   Ghost,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useAuthStore } from "@/store/authStore";
 import ChallengeLeaderboard from "@/components/ChallengeLeaderboard";
+import QuizEditorDialog from "@/components/QuizEditorDialog";
+import QuizRunner, { type QuizOutcome } from "@/components/QuizRunner";
 import {
   subscribeQuizzesBySubject,
   subscribeQuizResults,
@@ -39,15 +31,6 @@ import {
   MAX_QUIZ_ATTEMPTS,
 } from "@/services/firestore";
 import type { Subject, Quiz, QuizResult } from "@/types";
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
 
 function timeLeftMs(end: string) {
   return Math.max(0, new Date(end).getTime() - Date.now());
@@ -83,228 +66,6 @@ function ChallengeCountdown({ endDate }: { endDate: string }) {
         </div>
       ))}
     </div>
-  );
-}
-
-interface QuizFormState {
-  id?: string;
-  title: string;
-  description: string;
-  questions: { text: string; options: string[]; correctText: string }[];
-}
-
-const emptyQuestion = () => ({
-  text: "",
-  options: ["", "", "", ""],
-  correctText: "",
-});
-
-function AdminQuizDialog({
-  quiz,
-  subjectId,
-  subjectColor,
-  onSaved,
-  onClose,
-}: {
-  quiz: Quiz | null;
-  subjectId: string;
-  subjectColor: string;
-  onSaved: () => void;
-  onClose: () => void;
-}) {
-  const [form, setForm] = useState<QuizFormState>(() =>
-    quiz
-      ? {
-          id: quiz.id,
-          title: quiz.title,
-          description: quiz.description || "",
-          questions: quiz.questions.map((q) => ({
-            text: q.text,
-            options: q.options.map((o) => o),
-            correctText: q.correctText,
-          })),
-        }
-      : { title: "", description: "", questions: [emptyQuestion()] }
-  );
-  const [saving, setSaving] = useState(false);
-
-  const setQuestion = (idx: number, patch: Partial<QuizFormState["questions"][number]>) => {
-    setForm((f) => ({
-      ...f,
-      questions: f.questions.map((q, i) => (i === idx ? { ...q, ...patch } : q)),
-    }));
-  };
-
-  const addQuestion = () => setForm((f) => ({ ...f, questions: [...f.questions, emptyQuestion()] }));
-  const removeQuestion = (idx: number) =>
-    setForm((f) => ({ ...f, questions: f.questions.filter((_, i) => i !== idx) }));
-  const setOption = (qi: number, oi: number, value: string) =>
-    setQuestion(qi, {
-      options: form.questions[qi]!.options.map((o, i) => (i === oi ? value : o)),
-    });
-  const adjustOptions = (qi: number, delta: number) => {
-    const q = form.questions[qi]!;
-    let options = [...q.options];
-    const target = options.length + delta;
-    if (target < 2 || target > 4) return;
-    while (options.length < target) options.push("");
-    options = options.slice(0, target);
-    let correctText = q.correctText;
-    if (!options.includes(correctText)) correctText = "";
-    setQuestion(qi, { options, correctText });
-  };
-
-  const validate = (): string | null => {
-    if (!form.title.trim()) return "أدخل عنوان الاختبار";
-    if (form.questions.length === 0) return "أضف سؤالاً واحداً على الأقل";
-    for (let i = 0; i < form.questions.length; i++) {
-      const q = form.questions[i]!;
-      if (!q.text.trim()) return `السؤال ${i + 1} بلا نص`;
-      const filled = q.options.filter((o) => o.trim()).length;
-      if (filled < 2) return `السؤال ${i + 1}: تحتاج خيارين ناجحين على الأقل`;
-      const unique = new Set(q.options.map((o) => o.trim()).filter(Boolean));
-      if (unique.size !== filled) return `السؤال ${i + 1}: يوجد خياران متطابقان`;
-      if (!q.options.includes(q.correctText)) return `السؤال ${i + 1}: حدّد الإجابة الصحيحة`;
-    }
-    return null;
-  };
-
-  const handleSave = async () => {
-    const error = validate();
-    if (error) {
-      toast.error(error);
-      return;
-    }
-    setSaving(true);
-    try {
-      const payload: Omit<Quiz, "id" | "createdAt"> = {
-        subjectId,
-        title: form.title.trim(),
-        description: form.description.trim(),
-        questions: form.questions.map((q) => ({
-          text: q.text.trim(),
-          options: q.options.map((o) => o.trim()),
-          correctText: q.correctText.trim(),
-        })),
-        isFree: quiz?.isFree ?? true,
-        isHidden: quiz?.isHidden ?? false,
-      };
-      if (form.id) {
-        await updateQuiz(form.id, payload);
-        toast.success("تم حفظ التعديلات");
-      } else {
-        await createQuiz(payload);
-        toast.success("تمت إضافة الاختبار");
-      }
-      onSaved();
-      onClose();
-    } catch (e) {
-      console.error("Save quiz error:", e);
-      toast.error("حدث خطأ أثناء حفظ الاختبار");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto" dir="rtl">
-        <DialogHeader>
-          <DialogTitle>{form.id ? "تعديل الاختبار" : "إضافة اختبار جديد"}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label>عنوان الاختبار</Label>
-            <Input
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="مثال: اختبار الفصل الأول"
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <Label>وصف (اختياري)</Label>
-            <Input
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="وصف قصير"
-              className="mt-1"
-            />
-          </div>
-
-          <div className="space-y-4">
-            {form.questions.map((q, qi) => (
-              <div key={qi} className="rounded-xl border p-3 space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <Label>السؤال {qi + 1}</Label>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => adjustOptions(qi, -1)}
-                      disabled={q.options.length <= 2}
-                    >
-                      -
-                    </Button>
-                    <span className="text-xs text-muted-foreground">{q.options.length} خيارات</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => adjustOptions(qi, 1)}
-                      disabled={q.options.length >= 4}
-                    >
-                      +
-                    </Button>
-                    {form.questions.length > 1 && (
-                      <Button type="button" variant="ghost" size="icon" onClick={() => removeQuestion(qi)}>
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                <Input
-                  value={q.text}
-                  onChange={(e) => setQuestion(qi, { text: e.target.value })}
-                  placeholder="نص السؤال"
-                />
-                {q.options.map((opt, oi) => (
-                  <div key={oi} className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name={`correct-${qi}`}
-                      className="w-4 h-4 shrink-0"
-                      style={{ accentColor: subjectColor }}
-                      checked={q.correctText === opt}
-                      onChange={() => setQuestion(qi, { correctText: opt })}
-                    />
-                    <Input
-                      value={opt}
-                      onChange={(e) => setOption(qi, oi, e.target.value)}
-                      placeholder={oi === 0 ? "الخيار الصحيح" : `الخيار ${oi + 1}`}
-                      dir="rtl"
-                    />
-                  </div>
-                ))}
-                <p className="text-[11px] text-muted-foreground">
-                  اختر بالدائرة الإجابة الصحيحة (المقارنة تتم بالنص، والخيارات تُخلَّط تلقائياً عند الاختبار).
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <Button type="button" variant="outline" className="w-full gap-2" onClick={addQuestion}>
-            <Plus className="h-4 w-4" />
-            إضافة سؤال
-          </Button>
-
-          <Button type="button" className="w-full" onClick={handleSave} disabled={saving}>
-            {saving ? "جاري الحفظ..." : form.id ? "حفظ التعديلات" : "إضافة الاختبار"}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -355,73 +116,41 @@ export default function ChallengeSection({
   }, [endDate]);
 
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
-  const [attempt, setAttempt] = useState<{ qOrder: number[]; optOrders: number[][] } | null>(null);
-  const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [resultView, setResultView] = useState<{
-    quiz: Quiz;
-    score: number;
-    correct: number;
-    total: number;
-    attempt: number;
-    saved: boolean;
-  } | null>(null);
-
   const [manageOpen, setManageOpen] = useState(false);
   const [editingQuiz, setEditingQuiz] = useState<Quiz | null>(null);
 
-  const startQuiz = (quiz: Quiz) => {
-    const order = {
-      qOrder: shuffle(quiz.questions.map((_, i) => i)),
-      optOrders: quiz.questions.map((q) => shuffle(q.options.map((_, oi) => oi))),
-    };
-    setAttempt(order);
-    setAnswers({});
-    setResultView(null);
-    setActiveQuiz(quiz);
-  };
-
-  const submitAnswer = async () => {
-    if (!activeQuiz || !attempt) return;
-    const total = activeQuiz.questions.length;
+  const handleChallengeSubmit = async (answers: Record<number, string>): Promise<QuizOutcome> => {
+    const total = activeQuiz?.questions.length ?? 0;
     let correct = 0;
     for (let qi = 0; qi < total; qi++) {
-      if (answers[qi] === activeQuiz.questions[qi]!.correctText) correct++;
+      if (answers[qi] === activeQuiz!.questions[qi]!.correctText) correct++;
     }
     const score = total === 0 ? 0 : Math.round((correct / total) * 100);
-    setSubmitting(true);
-    try {
-      let saved = true;
-      let attemptNumber = 1;
-      if (studentSession) {
-        const res = await submitQuizResult({
-          subjectId: subject.id,
-          username: studentSession.username,
-          studentName: studentSession.displayName,
-          score,
-          correctCount: correct,
-          totalQuestions: total,
-        });
-        saved = res.saved;
-        attemptNumber = res.attempt;
-        if (!saved) {
-          toast.error("استوفيت محاولاتك بالفعل");
-        } else if (attemptNumber === 1) {
-          toast.success("تم حفظ نتيجتك — يمكنك المحاولة مرة أخرى لتحسينها");
-        } else {
-          toast.success("تم حفظ نتيجتك — استوفيت محاولاتك");
-        }
+    let saved = true;
+    let attemptNumber = 1;
+    if (studentSession) {
+      const res = await submitQuizResult({
+        subjectId: subject.id,
+        username: studentSession.username,
+        studentName: studentSession.displayName,
+        score,
+        correctCount: correct,
+        totalQuestions: total,
+      });
+      saved = res.saved;
+      attemptNumber = res.attempt;
+      if (!saved) {
+        toast.error("استوفيت محاولاتك بالفعل");
+      } else if (attemptNumber === 1) {
+        toast.success("تم حفظ نتيجتك — يمكنك المحاولة مرة أخرى لتحسينها");
       } else {
-        toast.error("يجب تسجيل الدخول أولاً لحفظ نتيجتك");
+        toast.success("تم حفظ نتيجتك — استوفيت محاولاتك");
       }
-      setResultView({ quiz: activeQuiz, score, correct, total, attempt: attemptNumber, saved });
-    } catch (e) {
-      console.error("Submit quiz error:", e);
-      toast.error("حدث خطأ أثناء حفظ نتيجتك");
-      setResultView({ quiz: activeQuiz, score, correct, total, attempt: (myResult?.attempts || 0) + 1, saved: true });
-    } finally {
-      setSubmitting(false);
+    } else {
+      toast.error("يجب تسجيل الدخول أولاً لحفظ نتيجتك");
+      saved = false;
     }
+    return { score, correct, total, attempt: attemptNumber, saved };
   };
 
   const rankTitle = ended ? "لوحة الشرف — أبطال التحدي" : "لوحة النتائج — أفضل 5";
@@ -524,7 +253,7 @@ export default function ChallengeSection({
                           size="sm"
                           className="w-full gap-1"
                           disabled={ended || attemptsReached}
-                          onClick={() => startQuiz(q)}
+                          onClick={() => setActiveQuiz(q)}
                           style={{ backgroundColor: subject.color }}
                         >
                           {ended
@@ -619,148 +348,32 @@ export default function ChallengeSection({
         </div>
       </div>
 
-      {/* Take quiz dialog */}
-      <Dialog
-        open={!!activeQuiz}
-        onOpenChange={(o) => {
-          if (!o) {
-            setActiveQuiz(null);
-            setResultView(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Trophy className="h-5 w-5" style={{ color: subject.color }} />
-              {activeQuiz?.title}
-            </DialogTitle>
-          </DialogHeader>
-
-          {activeQuiz && !resultView && attempt && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                submitAnswer();
-              }}
-              className="space-y-5"
-            >
-              <p className="text-xs text-muted-foreground">
-                الخيارات والأسئلة تُخلَّط عشوائياً في كل محاولة — أجِب عن جميع الأسئلة ثم اضغط "إنهاء وتصحيح".
-              </p>
-              {attempt.qOrder.map((qi, orderIdx) => {
-                const q = activeQuiz.questions[qi]!;
-                const optionIds = attempt.optOrders[qi]!;
-                return (
-                  <div key={qi} className="rounded-xl border p-4">
-                    <p className="font-bold mb-3">
-                      <span className="text-muted-foreground">{orderIdx + 1}.</span> {q.text}
-                    </p>
-                    <div className="space-y-2">
-                      {optionIds.map((oi) => (
-                        <label
-                          key={oi}
-                          className={`flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer transition-all ${
-                            answers[qi] === q.options[oi] ? "border-primary bg-primary/10" : "hover:bg-muted/50"
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name={`answer-${qi}`}
-                            className="w-4 h-4"
-                            checked={answers[qi] === q.options[oi]}
-                            onChange={() => setAnswers((a) => ({ ...a, [qi]: q.options[oi]! }))}
-                            required
-                          />
-                          <span>{q.options[oi]}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-              <Button
-                type="submit"
-                className="w-full gap-2"
-                disabled={submitting || Object.keys(answers).length !== activeQuiz.questions.length}
-                style={{ backgroundColor: subject.color }}
-              >
-                {submitting ? "جاري الحفظ والتصحيح..." : "إنهاء وتصحيح"}
-              </Button>
-            </form>
-          )}
-
-          {activeQuiz && resultView && (
-            <div className="space-y-4">
-              <div className="rounded-xl p-6 text-center" style={{ background: subject.color + "18" }}>
-                <p className="text-4xl font-black" style={{ color: subject.color }}>
-                  {resultView.score}%
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  أجبت على {resultView.correct} من {resultView.total} إجابة صحيحة
-                </p>
-                {resultView.attempt === 1 && resultView.saved ? (
-                  <p className="mt-3 rounded-lg bg-amber-500/15 px-3 py-2 text-sm font-bold text-amber-600">
-                    يمكنك المحاولة مرة أخرى لتحسين نتيجتك — تبقى لك محاولة واحدة
-                  </p>
-                ) : resultView.attempt >= 2 ? (
-                  <p className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm font-bold text-red-600">
-                    استوفيت محاولاتك
-                  </p>
-                ) : (
-                  <p className="mt-3 text-sm text-muted-foreground">لم تُحفظ نتيجتك — سجّل دخولك أولاً.</p>
-                )}
-              </div>
-
-              <div className="space-y-3">
-                {activeQuiz.questions.map((q, qi) => {
-                  const studentAnswer = answers[qi];
-                  const isCorrect = studentAnswer === q.correctText;
-                  return (
-                    <div key={qi} className={`rounded-xl border p-3 ${isCorrect ? "border-green-500/40" : "border-red-500/30"}`}>
-                      <p className="font-bold text-sm">
-                        <span className="text-muted-foreground">{qi + 1}.</span> {q.text}
-                      </p>
-                      <div className="mt-2 space-y-1 text-sm">
-                        <p className={isCorrect ? "text-green-600 flex items-center gap-1" : "text-red-600 flex items-center gap-1"}>
-                          {isCorrect ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                          إجابتك: {studentAnswer || "لم تُجب"}
-                        </p>
-                        {!isCorrect && (
-                          <p className="text-green-700 flex items-center gap-1">
-                            <CheckCircle2 className="h-4 w-4" />
-                            الصحيح: {q.correctText}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  variant="secondary"
-                  className="flex-1"
-                  disabled={ended || (myResult?.attempts || 0) >= MAX_QUIZ_ATTEMPTS}
-                  onClick={() => startQuiz(activeQuiz)}
-                >
-                  إعادة المحاولة
-                </Button>
-                <Button className="flex-1" onClick={() => setActiveQuiz(null)}>
-                  العودة للوحة
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {activeQuiz && (
+        <QuizRunner
+          key={activeQuiz.id}
+          quiz={activeQuiz}
+          subjectColor={subject.color}
+          maxAttempts={MAX_QUIZ_ATTEMPTS}
+          locked={ended}
+          onSubmit={handleChallengeSubmit}
+          onClose={() => setActiveQuiz(null)}
+        />
+      )}
 
       {manageOpen && (
-        <AdminQuizDialog
+        <QuizEditorDialog
           quiz={editingQuiz}
           subjectId={subject.id}
           subjectColor={subject.color}
+          onSave={async (payload, id) => {
+            if (id) {
+              await updateQuiz(id, payload);
+              toast.success("تم حفظ التعديلات");
+            } else {
+              await createQuiz(payload);
+              toast.success("تمت إضافة الاختبار");
+            }
+          }}
           onSaved={() => setEditingQuiz(null)}
           onClose={() => {
             setEditingQuiz(null);

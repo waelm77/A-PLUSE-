@@ -84,6 +84,14 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
+    match /materialQuizzes/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /materialQuizResults/{doc} {
+      allow read: if true;
+      allow write: if true;
+    }
 
     // ─── COUNTERS (atomic order counters per subject) ──────────
     // Read/write admin only.

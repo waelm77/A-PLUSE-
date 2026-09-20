@@ -50,6 +50,8 @@ import {
   Copy,
   Sparkles,
   Trophy,
+  ClipboardCheck,
+  ChevronDown,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useTrialStore } from "@/store/trialStore";
@@ -71,9 +73,11 @@ import {
   resetStats,
   toggleSubjectHidden,
   sortSubjectsForView,
+  subscribeAllMaterialQuizResults,
+  deleteMaterialQuizResult,
 } from "@/services/firestore";
 import { AVAILABLE_ICONS, COLORS } from "@/lib/constants";
-import type { Subject, Student, Ticker, Admin, StatsData } from "@/types";
+import type { Subject, Student, Ticker, Admin, StatsData, QuizResult } from "@/types";
 
 export default function AdminPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
@@ -98,6 +102,22 @@ export default function AdminPage() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
+
+  // ─── Material quiz results (نتائج اختبار المواد) ──
+  const [materialQuizResults, setMaterialQuizResults] = useState<QuizResult[]>([]);
+  const [openQuizSubject, setOpenQuizSubject] = useState<string | null>(null);
+
+  useEffect(() => subscribeAllMaterialQuizResults(setMaterialQuizResults), []);
+
+  const handleDeleteMaterialResult = async (result: QuizResult) => {
+    if (!confirm(`حذف نتيجة الطالب «${result.studentName || result.username}»؟`)) return;
+    try {
+      await deleteMaterialQuizResult(result.id);
+      toast.success("تم حذف النتيجة");
+    } catch {
+      toast.error("حدث خطأ أثناء الحذف");
+    }
+  };
 
   const loadStats = async () => {
     try {
@@ -1787,6 +1807,162 @@ export default function AdminPage() {
                           </TableBody>
                         </Table>
                       </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Material quiz results */}
+                <Card className="glass border-none">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg font-bold flex items-center gap-2">
+                      <ClipboardCheck className="h-5 w-5 text-green-400" />
+                      نتائج اختبار المواد (التفاعلية)
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      أفضل نتيجة لكل طالب في الاختبارات التفاعلية؛ أضغط على المقرر لعرض الطلاب
+                    </p>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {materialQuizResults.length === 0 ? (
+                      <div className="p-6 text-center text-sm text-muted-foreground">
+                        لا توجد نتائج بعد — ستظهر هنا تلقائياً عند أداء الطلاب للاختبارات التفاعلية من المنصة
+                      </div>
+                    ) : (
+                      <>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>المقرر</TableHead>
+                                <TableHead className="text-center">عدد الطلاب</TableHead>
+                                <TableHead className="text-center">المتوسط الأفضل</TableHead>
+                                <TableHead className="text-center">آخر تحديث</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {Object.entries(
+                                materialQuizResults.reduce<Record<string, QuizResult[]>>((acc, r) => {
+                                  (acc[r.subjectId] ||= []).push(r);
+                                  return acc;
+                                }, {})
+                              )
+                                .map(([subjectId, items]) => ({
+                                  subjectId,
+                                  items: [...items].sort((a, b) => b.score - a.score),
+                                }))
+                                .map(({ subjectId, items }) => {
+                                  const subject = subjects.find((s) => s.id === subjectId);
+                                  const avg = Math.round(
+                                    items.reduce((s, r) => s + r.score, 0) / items.length
+                                  );
+                                  const expanded = openQuizSubject === subjectId;
+                                  return (
+                                    <TableRow
+                                      key={subjectId}
+                                      className="cursor-pointer hover:bg-muted/40"
+                                      onClick={() => setOpenQuizSubject(expanded ? null : subjectId)}
+                                    >
+                                      <TableCell className="font-medium">
+                                        <span className="flex items-center gap-2">
+                                          <ChevronDown
+                                            className={`h-4 w-4 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+                                          />
+                                          <span
+                                            className="inline-block h-3 w-3 rounded-full shrink-0"
+                                            style={{ backgroundColor: subject?.color || "#888" }}
+                                          />
+                                          {subject?.name || subjectId}
+                                        </span>
+                                      </TableCell>
+                                      <TableCell className="text-center">{items.length}</TableCell>
+                                      <TableCell
+                                        className="text-center font-bold"
+                                        style={{
+                                          color: avg >= 80 ? "#22c55e" : avg >= 60 ? "#f59e0b" : "#ef4444",
+                                        }}
+                                      >
+                                        {avg}%
+                                      </TableCell>
+                                      <TableCell className="text-center text-muted-foreground">
+                                        {new Date(items[0]!.updatedAt).toLocaleDateString("ar-EG")}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                        {openQuizSubject &&
+                          (() => {
+                            const group = materialQuizResults.filter(
+                              (r) => r.subjectId === openQuizSubject
+                            );
+                            if (group.length === 0) return null;
+                            const subject = subjects.find((s) => s.id === openQuizSubject);
+                            const sorted = [...group].sort((a, b) => b.score - a.score);
+                            return (
+                              <div className="border-t border-border/50 p-3">
+                                <p className="text-sm font-bold mb-2 flex items-center gap-2">
+                                  <span
+                                    className="inline-block h-3 w-3 rounded-full"
+                                    style={{ backgroundColor: subject?.color || "#888" }}
+                                  />
+                                  طلاب {subject?.name || openQuizSubject}
+                                </p>
+                                <div className="overflow-x-auto">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow className="hover:bg-transparent">
+                                        <TableHead>الطالب</TableHead>
+                                        <TableHead className="text-center">النتيجة</TableHead>
+                                        <TableHead className="text-center">المحاولات</TableHead>
+                                        <TableHead className="text-center">آخر تحديث</TableHead>
+                                        <TableHead className="text-center">إجراء</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {sorted.map((r) => (
+                                        <TableRow key={r.id} className="hover:bg-transparent">
+                                          <TableCell className="font-medium">
+                                            {r.studentName || r.username}
+                                          </TableCell>
+                                          <TableCell
+                                            className="text-center font-bold"
+                                            style={{
+                                              color:
+                                                r.score >= 80
+                                                  ? "#22c55e"
+                                                  : r.score >= 60
+                                                    ? "#f59e0b"
+                                                    : "#ef4444",
+                                            }}
+                                          >
+                                            {r.score}%
+                                          </TableCell>
+                                          <TableCell className="text-center">{r.attempts}</TableCell>
+                                          <TableCell className="text-center text-muted-foreground">
+                                            {new Date(r.updatedAt).toLocaleString("ar-EG")}
+                                          </TableCell>
+                                          <TableCell className="text-center">
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              className="p-2 h-auto text-red-400 hover:text-red-300"
+                                              title="حذف نتيجة الطالب"
+                                              onClick={() => handleDeleteMaterialResult(r)}
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                      </>
                     )}
                   </CardContent>
                 </Card>

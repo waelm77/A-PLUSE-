@@ -48,6 +48,8 @@ import {
   Key,
   LogIn,
   Send,
+  ClipboardCheck,
+  FormInput,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import toast from "react-hot-toast";
@@ -83,8 +85,17 @@ import {
   toggleVideoHidden,
   toggleFileHidden,
   toggleAssessmentHidden,
+  subscribeMaterialQuizzesBySubject,
+  createMaterialQuiz,
+  updateMaterialQuiz,
+  deleteMaterialQuiz,
+  toggleMaterialQuizFree,
+  toggleMaterialQuizHidden,
+  submitMaterialQuizResult,
 } from "@/services/firestore";
-import type { Subject, Video, FileItem, Assessment } from "@/types";
+import type { Subject, Video, FileItem, Assessment, Quiz } from "@/types";
+import QuizEditorDialog, { type QuizPayload } from "@/components/QuizEditorDialog";
+import QuizRunner, { type QuizOutcome } from "@/components/QuizRunner";
 
   const extractYouTubeId = (url: string): string | null => {
     if (!url) return null;
@@ -320,6 +331,12 @@ export default function SubjectPage() {
     isFree: true,
   });
 
+  const [materialQuizzes, setMaterialQuizzes] = useState<Quiz[]>([]);
+  const [materialQuizOpen, setMaterialQuizOpen] = useState(false);
+  const [editingMaterialQuiz, setEditingMaterialQuiz] = useState<Quiz | null>(null);
+  const [activeMaterialQuiz, setActiveMaterialQuiz] = useState<Quiz | null>(null);
+  const [quizAddChoiceOpen, setQuizAddChoiceOpen] = useState(false);
+
   const loadData = async () => {
     if (!id) return () => {};
     setLoading(true);
@@ -328,6 +345,7 @@ export default function SubjectPage() {
       subscribeVideosBySubject(id, setVideos, () => toast.error("حدث خطأ في تحميل الفيديوهات")),
       subscribeFilesBySubject(id, setFilesList, () => toast.error("حدث خطأ في تحميل الملفات")),
       subscribeAssessmentsBySubject(id, setAssessments, () => toast.error("حدث خطأ في تحميل الاختبارات")),
+      subscribeMaterialQuizzesBySubject(id, setMaterialQuizzes, () => toast.error("حدث خطأ في تحميل الاختبارات التفاعلية")),
     ];
     try {
       const sub = await getSubjectById(id);
@@ -454,6 +472,10 @@ export default function SubjectPage() {
   const visibleAssessments = useMemo(
     () => (isAdmin ? assessments : assessments.filter((a) => !a.isHidden)),
     [isAdmin, assessments]
+  );
+  const visibleMaterialQuizzes = useMemo(
+    () => (isAdmin ? materialQuizzes : materialQuizzes.filter((q) => !q.isHidden)),
+    [isAdmin, materialQuizzes]
   );
 
   const openVideoDialog = (video?: Video, presetType?: "theory" | "review" | "practical") => {
@@ -717,6 +739,73 @@ export default function SubjectPage() {
       await loadData();
     } catch {
       toast.error("حدث خطأ أثناء تغيير الحالة");
+    }
+  };
+
+  const handleMaterialQuizSave = async (payload: QuizPayload, existingId?: string) => {
+    if (!id) return;
+    try {
+      if (existingId) {
+        await updateMaterialQuiz(existingId, payload);
+        toast.success("تم حفظ تعديلات الاختبار");
+      } else {
+        await createMaterialQuiz(payload);
+        toast.success("تمت إضافة الاختبار التفاعلي");
+      }
+    } catch {
+      toast.error("حدث خطأ أثناء حفظ الاختبار");
+    }
+  };
+
+  const handleMaterialQuizSubmitFor = (quiz: Quiz) => async (
+    answers: Record<number, string>
+  ): Promise<QuizOutcome> => {
+    if (!studentSession) {
+      toast.error("يجب تسجيل دخول الطالب أولاً لحفظ نتيجتك");
+      return { score: 0, correct: 0, total: quiz.questions.length, attempt: 1, saved: false };
+    }
+    const total = quiz.questions.length;
+    let correct = 0;
+    for (let qi = 0; qi < total; qi++) {
+      if (answers[qi] === quiz.questions[qi]!.correctText) correct++;
+    }
+    const score = total === 0 ? 0 : Math.round((correct / total) * 100);
+    const res = await submitMaterialQuizResult({
+      subjectId: quiz.subjectId,
+      username: studentSession.username,
+      studentName: studentSession.displayName,
+      score,
+      correctCount: correct,
+      totalQuestions: total,
+    });
+    return { score, correct, total, attempt: res.attempt, saved: res.saved };
+  };
+
+  const handleToggleMaterialQuizFree = async (quizId: string, current: boolean) => {
+    try {
+      await toggleMaterialQuizFree(quizId, !current);
+      toast.success(!current ? "تم جعل الاختبار مجاني" : "تم جعل الاختبار للمشتركين فقط");
+    } catch {
+      toast.error("حدث خطأ أثناء تغيير الحالة");
+    }
+  };
+
+  const handleToggleMaterialQuizHidden = async (quizId: string, current: boolean) => {
+    try {
+      await toggleMaterialQuizHidden(quizId, !current);
+      toast.success(!current ? "تم إخفاء الاختبار عن الطلاب" : "تم إظهار الاختبار للطلاب");
+    } catch {
+      toast.error("حدث خطأ أثناء تغيير الحالة");
+    }
+  };
+
+  const handleDeleteMaterialQuiz = async (quizId: string) => {
+    if (!confirm("حذف هذا الاختبار وتاريخ نتائجه؟")) return;
+    try {
+      await deleteMaterialQuiz(quizId);
+      toast.success("تم الحذف");
+    } catch {
+      toast.error("حدث خطأ أثناء الحذف");
     }
   };
 
@@ -1160,53 +1249,103 @@ export default function SubjectPage() {
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xl font-bold">اختبارات تدريبية</h2>
               {isAdmin && (
-                <Dialog open={assessmentOpen} onOpenChange={setAssessmentOpen}>
-                  <Button size="sm" className="gap-1" onClick={() => setAssessmentOpen(true)}>
+                <>
+                  <Button size="sm" className="gap-1" onClick={() => setQuizAddChoiceOpen(true)}>
                     <Plus className="h-4 w-4" />
                     إضافة اختبار
                   </Button>
-                  <DialogContent className="max-w-md" dir="rtl" aria-describedby={undefined}>
-                    <DialogHeader>
-                      <DialogTitle>إضافة رابط اختبار إلكتروني</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleAssessmentSubmit} className="space-y-4 mt-4">
-                      <div>
-                        <Label>عنوان الاختبار</Label>
-                        <Input
-                          value={assessmentForm.title}
-                          onChange={(e) => setAssessmentForm({ ...assessmentForm, title: e.target.value })}
-                          placeholder="مثال: اختبار الكيمياء - الفصل الأول"
-                          required
-                        />
+                  <Dialog open={quizAddChoiceOpen} onOpenChange={setQuizAddChoiceOpen}>
+                    <DialogContent className="max-w-md" dir="rtl" aria-describedby={undefined}>
+                      <DialogHeader>
+                        <DialogTitle>إضافة اختبار</DialogTitle>
+                      </DialogHeader>
+                      <div className="grid gap-3 mt-4">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuizAddChoiceOpen(false);
+                            setAssessmentOpen(true);
+                          }}
+                          className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-start transition hover:border-primary/50 hover:bg-primary/5"
+                        >
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-600">
+                            <FormInput className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <p className="font-bold">اختبار من Google Forms (رابط)</p>
+                            <p className="text-sm text-muted-foreground mt-0.5">
+                              إضافة رابط اختبار إلكتروني يُفتح خارج المنصة
+                            </p>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuizAddChoiceOpen(false);
+                            setEditingMaterialQuiz(null);
+                            setMaterialQuizOpen(true);
+                          }}
+                          className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-start transition hover:border-primary/50 hover:bg-primary/5"
+                        >
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white"
+                            style={{ backgroundColor: subject.color }}
+                          >
+                            <ClipboardCheck className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <p className="font-bold">اختبار تفاعلي من المنصة</p>
+                            <p className="text-sm text-muted-foreground mt-0.5">
+                              أسئلة اختيار من متعدد بتحكمك الكامل، وتظهر نتائج الطلاب في إحصائيات المقرر
+                            </p>
+                          </div>
+                        </button>
                       </div>
-                      <div>
-                        <Label>رابط الاختبار (Google Forms / Microsoft Forms)</Label>
-                        <Input
-                          value={assessmentForm.url}
-                          onChange={(e) => setAssessmentForm({ ...assessmentForm, url: e.target.value })}
-                          placeholder="أدخل رابط الاختبار هنا"
-                          required
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="assessmentIsFree"
-                          checked={assessmentForm.isFree}
-                          onChange={(e) => setAssessmentForm({ ...assessmentForm, isFree: e.target.checked })}
-                          className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
-                        />
-                        <Label htmlFor="assessmentIsFree">اختبار مجاني (متاح للجميع)</Label>
-                      </div>
-                      <Button type="submit" className="w-full" disabled={submitting}>
-                        {submitting ? "جاري الإضافة..." : "إضافة الاختبار"}
-                      </Button>
-                    </form>
-                  </DialogContent>
-                </Dialog>
+                    </DialogContent>
+                  </Dialog>
+                  <Dialog open={assessmentOpen} onOpenChange={setAssessmentOpen}>
+                    <DialogContent className="max-w-md" dir="rtl" aria-describedby={undefined}>
+                      <DialogHeader>
+                        <DialogTitle>إضافة رابط اختبار إلكتروني</DialogTitle>
+                      </DialogHeader>
+                      <form onSubmit={handleAssessmentSubmit} className="space-y-4 mt-4">
+                        <div>
+                          <Label>عنوان الاختبار</Label>
+                          <Input
+                            value={assessmentForm.title}
+                            onChange={(e) => setAssessmentForm({ ...assessmentForm, title: e.target.value })}
+                            placeholder="مثال: اختبار الكيمياء - الفصل الأول"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label>رابط الاختبار (Google Forms / Microsoft Forms)</Label>
+                          <Input
+                            value={assessmentForm.url}
+                            onChange={(e) => setAssessmentForm({ ...assessmentForm, url: e.target.value })}
+                            placeholder="أدخل رابط الاختبار هنا"
+                            required
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="assessmentIsFree"
+                            checked={assessmentForm.isFree}
+                            onChange={(e) => setAssessmentForm({ ...assessmentForm, isFree: e.target.checked })}
+                            className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                          />
+                          <Label htmlFor="assessmentIsFree">اختبار مجاني (متاح للجميع)</Label>
+                        </div>
+                        <Button type="submit" className="w-full" disabled={submitting}>
+                          {submitting ? "جاري الإضافة..." : "إضافة الاختبار"}
+                        </Button>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                </>
               )}
             </div>
-            {visibleAssessments.length > 0 ? (
+            {visibleAssessments.length > 0 || visibleMaterialQuizzes.length > 0 ? (
               <div className="space-y-3">
                 {visibleAssessments.map((test) => (
                   <div
@@ -1231,6 +1370,24 @@ export default function SubjectPage() {
                     />
                   </div>
                 ))}
+                {visibleMaterialQuizzes.map((q) => (
+                  <MaterialQuizCard
+                    key={q.id}
+                    quiz={q}
+                    isAdmin={isAdmin}
+                    color={subject.color}
+                    hasSubjectAccess={hasSubjectAccess}
+                    onOpenAccess={openAccessDialog}
+                    onStart={() => setActiveMaterialQuiz(q)}
+                    onEdit={() => {
+                      setEditingMaterialQuiz(q);
+                      setMaterialQuizOpen(true);
+                    }}
+                    onToggleFree={(qq) => handleToggleMaterialQuizFree(qq.id, qq.isFree ?? true)}
+                    onToggleHide={(qq) => handleToggleMaterialQuizHidden(qq.id, qq.isHidden ?? false)}
+                    onDelete={(qq) => handleDeleteMaterialQuiz(qq.id)}
+                  />
+                ))}
               </div>
             ) : (
               <EmptyState icon={LayoutDashboard} text="لا توجد اختبارات تدريبية متاحة" />
@@ -1238,6 +1395,34 @@ export default function SubjectPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {activeMaterialQuiz && (
+        <QuizRunner
+          key={activeMaterialQuiz.id}
+          quiz={activeMaterialQuiz}
+          subjectColor={subject.color}
+          maxAttempts={9999}
+          celebrate
+          onSubmit={handleMaterialQuizSubmitFor(activeMaterialQuiz)}
+          onClose={() => setActiveMaterialQuiz(null)}
+        />
+      )}
+
+      {materialQuizOpen && (
+        <QuizEditorDialog
+          quiz={editingMaterialQuiz}
+          subjectId={subject.id}
+          subjectColor={subject.color}
+          newTitle="إضافة اختبار تفاعلي من المنصة"
+          editTitle="تعديل الاختبار التفاعلي"
+          onSave={handleMaterialQuizSave}
+          onSaved={() => setEditingMaterialQuiz(null)}
+          onClose={() => {
+            setEditingMaterialQuiz(null);
+            setMaterialQuizOpen(false);
+          }}
+        />
+      )}
 
       {/* Shared Video Dialog for all tabs */}
       <Dialog open={videoOpen} onOpenChange={(o) => { if (!o) { setEditingVideo(null); } setVideoOpen(o); }}>
@@ -2088,5 +2273,115 @@ function EmptyState({ icon: Icon, text }: { icon: React.ComponentType<{ classNam
       <Icon className="mb-3 h-10 w-10 text-muted-foreground/50" />
       <p className="text-muted-foreground">{text}</p>
     </div>
+  );
+}
+
+function MaterialQuizCard({
+  quiz,
+  isAdmin,
+  color,
+  hasSubjectAccess,
+  onOpenAccess,
+  onStart,
+  onEdit,
+  onToggleFree,
+  onToggleHide,
+  onDelete,
+}: {
+  quiz: Quiz;
+  isAdmin: boolean;
+  color: string;
+  hasSubjectAccess: boolean;
+  onOpenAccess: () => void;
+  onStart: () => void;
+  onEdit: () => void;
+  onToggleFree: (q: Quiz) => void;
+  onToggleHide: (q: Quiz) => void;
+  onDelete: (q: Quiz) => void;
+}) {
+  const canAccess = isAdmin || quiz.isFree || hasSubjectAccess;
+
+  return (
+    <Card className={`hover:border-primary/50 transition-all ${!canAccess ? 'opacity-80' : ''} ${quiz.isHidden ? 'opacity-45 saturate-50' : ''}`}>
+      <CardContent className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div
+            className="flex h-10 w-10 items-center justify-center rounded-lg shrink-0"
+            style={{ backgroundColor: color + "20" }}
+          >
+            <ClipboardCheck className="h-5 w-5" style={{ color: color }} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-semibold truncate">{quiz.title}</p>
+              <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary font-bold">
+                اختبار تفاعلي
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {quiz.questions.length} سؤال • محاولات غير محدودة
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
+          {!canAccess && (
+            <div className="rounded-full bg-black/60 p-1.5 shadow-sm text-white backdrop-blur-md ml-1">
+              <Lock className="h-4 w-4" />
+            </div>
+          )}
+          {quiz.isFree && !isAdmin && (
+            <span className="rounded bg-green-500/90 px-2 py-0.5 text-xs text-white font-bold">
+              مجاني
+            </span>
+          )}
+          {canAccess ? (
+            <Button size="sm" className="gap-1" onClick={onStart} style={{ backgroundColor: color }}>
+              <Play className="h-4 w-4" />
+              <span className="hidden sm:inline">بدء الاختبار</span>
+              <span className="sm:hidden">اختبار</span>
+            </Button>
+          ) : (
+            <Button size="sm" variant="secondary" onClick={onOpenAccess} className="gap-1">
+              <Lock className="h-4 w-4" />
+              <span className="hidden sm:inline">تسجيل دخول</span>
+            </Button>
+          )}
+          {isAdmin && (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                className={`p-2 h-auto ${!quiz.isFree ? 'text-green-600 hover:bg-green-50' : 'text-orange-600 hover:bg-orange-50'}`}
+                onClick={() => onToggleFree(quiz)}
+                title={quiz.isFree ? 'تحويل للمشتركين فقط' : 'تحويل لمجاني'}
+              >
+                {quiz.isFree ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className={`p-2 h-auto ${quiz.isHidden ? 'text-amber-600' : 'text-muted-foreground hover:text-amber-600'}`}
+                onClick={() => onToggleHide(quiz)}
+                title={quiz.isHidden ? 'إظهار الاختبار للطلاب' : 'إخفاء الاختبار عن الطلاب'}
+              >
+                {quiz.isHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="p-2 h-auto text-primary hover:text-primary/80"
+                onClick={onEdit}
+                title="تعديل الأسئلة"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="destructive" onClick={() => onDelete(quiz)}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

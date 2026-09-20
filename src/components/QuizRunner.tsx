@@ -1,0 +1,287 @@
+import { useState } from "react";
+import {
+  CheckCircle2,
+  XCircle,
+  PartyPopper,
+  ThumbsUp,
+  Target,
+  ListChecks,
+  ClipboardCheck,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import type { Quiz } from "@/types";
+
+export interface QuizOutcome {
+  score: number;
+  correct: number;
+  total: number;
+  attempt: number;
+  saved: boolean;
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function unlimitedAttemps(maxAttempts: number) {
+  return maxAttempts >= 999;
+}
+
+export default function QuizRunner({
+  quiz,
+  subjectColor,
+  maxAttempts,
+  celebrate = false,
+  locked = false,
+  onSubmit,
+  onClose,
+}: {
+  quiz: Quiz;
+  subjectColor: string;
+  maxAttempts: number;
+  celebrate?: boolean;
+  locked?: boolean;
+  onSubmit: (answers: Record<number, string>) => Promise<QuizOutcome>;
+  onClose: () => void;
+}) {
+  const [phase, setPhase] = useState<"take" | "result">("take");
+  const [attempt, setAttempt] = useState<{ qOrder: number[]; optOrders: number[][] }>(() => ({
+    qOrder: shuffle(quiz.questions.map((_, i) => i)),
+    optOrders: quiz.questions.map((q) => shuffle(q.options.map((_, oi) => oi))),
+  }));
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [outcome, setOutcome] = useState<QuizOutcome | null>(null);
+  const [showReview, setShowReview] = useState(true);
+
+  const restart = () => {
+    setPhase("take");
+    setAttempt({
+      qOrder: shuffle(quiz.questions.map((_, i) => i)),
+      optOrders: quiz.questions.map((q) => shuffle(q.options.map((_, oi) => oi))),
+    });
+    setAnswers({});
+    setOutcome(null);
+  };
+
+  const handleSubmit = () => {
+    setSubmitting(true);
+    onSubmit(answers)
+      .then((res) => {
+        setOutcome(res);
+        setShowReview(!(celebrate && res.saved && res.score >= 80));
+        setPhase("result");
+      })
+      .catch((e) => {
+        console.error("Submit quiz error:", e);
+        setOutcome({
+          score: 0,
+          correct: 0,
+          total: quiz.questions.length,
+          attempt: 1,
+          saved: false,
+        });
+        setShowReview(true);
+        setPhase("result");
+      })
+      .finally(() => setSubmitting(false));
+  };
+
+  const celebration = () => {
+    if (!celebrate || !outcome?.saved) return null;
+    const s = outcome.score;
+    if (s >= 80)
+      return {
+        icon: PartyPopper,
+        text: "أحسنت واصل التقدم 🎉",
+        classes: "bg-green-500/15 text-green-600",
+      };
+    if (s >= 60)
+      return {
+        icon: ThumbsUp,
+        text: "جيد يا بطل 💪",
+        classes: "bg-amber-500/15 text-amber-600",
+      };
+    return {
+      icon: Target,
+      text: "تحتاج للتركيز واصل التقدم يا بطل 🚀",
+      classes: "bg-orange-500/15 text-orange-600",
+    };
+  };
+
+  const attemptBanner = () => {
+    if (!outcome) return null;
+    if (!outcome.saved)
+      return (
+        <p className="mt-3 rounded-lg bg-muted/60 px-3 py-2 text-sm font-bold text-muted-foreground">
+          لم تُحفظ نتيجتك — سجّل دخولك أولاً.
+        </p>
+      );
+    const unlimited = unlimitedAttemps(maxAttempts);
+    const left = maxAttempts - outcome.attempt;
+    if (!unlimited && left <= 0)
+      return (
+        <p className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm font-bold text-red-600">
+          استوفيت محاولاتك
+        </p>
+      );
+    return (
+      <p className="mt-3 rounded-lg bg-amber-500/15 px-3 py-2 text-sm font-bold text-amber-600">
+        يمكنك المحاولة مرة أخرى لتحسين نتيجتك
+        {unlimited ? " — المحاولات غير محدودة" : left === 1 ? " — تبقى لك محاولة واحدة" : ` — عدد المحاولات المتبقية: ${left}`}
+      </p>
+    );
+  };
+
+  const celebrationMsg = celebration();
+  const retakeDisabled = locked || (!unlimitedAttemps(maxAttempts) && !!outcome && outcome.attempt >= maxAttempts);
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ClipboardCheck className="h-5 w-5" style={{ color: subjectColor }} />
+            {quiz.title}
+          </DialogTitle>
+        </DialogHeader>
+
+        {phase === "take" && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSubmit();
+            }}
+            className="space-y-5"
+          >
+            <p className="text-xs text-muted-foreground">
+              الخيارات والأسئلة تُخلَّط عشوائياً في كل محاولة — أجِب عن جميع الأسئلة ثم اضغط "إنهاء وتصحيح".
+            </p>
+            {attempt.qOrder.map((qi, orderIdx) => {
+              const q = quiz.questions[qi]!;
+              const optionIds = attempt.optOrders[qi]!;
+              return (
+                <div key={qi} className="rounded-xl border p-4">
+                  <p className="font-bold mb-3">
+                    <span className="text-muted-foreground">{orderIdx + 1}.</span> {q.text}
+                  </p>
+                  <div className="space-y-2">
+                    {optionIds.map((oi) => (
+                      <label
+                        key={oi}
+                        className={`flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer transition-all ${
+                          answers[qi] === q.options[oi] ? "border-primary bg-primary/10" : "hover:bg-muted/50"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name={`answer-${qi}`}
+                          className="w-4 h-4"
+                          checked={answers[qi] === q.options[oi]}
+                          onChange={() => setAnswers((a) => ({ ...a, [qi]: q.options[oi]! }))}
+                          required
+                        />
+                        <span>{q.options[oi]}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            <Button
+              type="submit"
+              className="w-full gap-2"
+              disabled={submitting || Object.keys(answers).length !== quiz.questions.length}
+              style={{ backgroundColor: subjectColor }}
+            >
+              {submitting ? "جاري الحفظ والتصحيح..." : "إنهاء وتصحيح"}
+            </Button>
+          </form>
+        )}
+
+        {phase === "result" && outcome && (
+          <div className="space-y-4">
+            <div className="rounded-xl p-6 text-center" style={{ background: subjectColor + "18" }}>
+              <p className="text-4xl font-black" style={{ color: subjectColor }}>
+                {outcome.score}%
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                أجبت على {outcome.correct} من {outcome.total} إجابة صحيحة
+              </p>
+
+              {celebrationMsg && (
+                <div className={`mt-3 flex items-center justify-center gap-2 rounded-xl px-4 py-3 ${celebrationMsg.classes}`}>
+                  <celebrationMsg.icon className="h-6 w-6" />
+                  <span className="text-lg font-black">{celebrationMsg.text}</span>
+                </div>
+              )}
+              {attemptBanner()}
+            </div>
+
+            {/* Review toggle */}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full gap-2"
+              onClick={() => setShowReview((s) => !s)}
+            >
+              <ListChecks className="h-4 w-4" />
+              {showReview ? "إخفاء مراجعة الإجابات" : "مراجعة الإجابات"}
+            </Button>
+
+            {showReview && (
+              <div className="space-y-3">
+                {quiz.questions.map((q, qi) => {
+                  const studentAnswer = answers[qi];
+                  const isCorrect = studentAnswer === q.correctText;
+                  return (
+                    <div
+                      key={qi}
+                      className={`rounded-xl border p-3 ${isCorrect ? "border-green-500/40" : "border-red-500/30"}`}
+                    >
+                      <p className="font-bold text-sm">
+                        <span className="text-muted-foreground">{qi + 1}.</span> {q.text}
+                      </p>
+                      {isCorrect ? (
+                        <p className="mt-2 flex items-center gap-1 text-sm font-medium text-green-600">
+                          <CheckCircle2 className="h-4 w-4" />
+                          {studentAnswer}
+                        </p>
+                      ) : (
+                        <div className="mt-2 space-y-1.5 text-sm">
+                          <p className="flex items-center gap-1 font-medium text-red-600">
+                            <XCircle className="h-4 w-4" />
+                            إجابتك: {studentAnswer || "لم تُجب"}
+                          </p>
+                          <p className="flex items-center gap-1 text-gray-500">
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            الصحيح: {q.correctText}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button variant="secondary" className="flex-1" disabled={retakeDisabled} onClick={restart}>
+                إعادة المحاولة
+              </Button>
+              <Button className="flex-1" onClick={onClose}>
+                إنهاء
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
