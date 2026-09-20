@@ -1,6 +1,7 @@
-import { lazy, Suspense } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { lazy, Suspense, type ReactNode } from 'react'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import Home from './pages/Home'
+import ErrorBoundary from './components/ErrorBoundary'
 import { Toaster } from 'react-hot-toast'
 
 const SubjectPage = lazy(() => import('./pages/SubjectPage'))
@@ -16,18 +17,25 @@ function PageLoader() {
   )
 }
 
+function ErrorBoundaryReset({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  return <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>;
+}
+
 export default function App() {
   return (
     <>
       <Toaster position="top-center" />
       <Suspense fallback={<PageLoader />}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/subject/:id" element={<SubjectPage />} />
-          <Route path="/admin" element={<AdminPage />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <ErrorBoundaryReset>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/subject/:id" element={<SubjectPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </ErrorBoundaryReset>
       </Suspense>
     </>
   )
