@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   CheckCircle2,
   XCircle,
@@ -209,10 +209,10 @@ export default function QuizRunner({
           <div className="space-y-4">
             <div className="rounded-xl p-6 text-center" style={{ background: subjectColor + "18" }}>
               <p className="text-4xl font-black" style={{ color: subjectColor }}>
-                {outcome.score}%
+                {outcome.correct}/{outcome.total}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
-                أجبت على {outcome.correct} من {outcome.total} إجابة صحيحة
+                {outcome.correct} إجابات صحيحة من أصل {outcome.total} — كل سؤال بدرجة واحدة
               </p>
 
               {celebrationMsg && (
@@ -248,23 +248,31 @@ export default function QuizRunner({
                       <p className="font-bold text-sm">
                         <span className="text-muted-foreground">{qi + 1}.</span> {q.text}
                       </p>
-                      {isCorrect ? (
-                        <p className="mt-2 flex items-center gap-1 text-sm font-medium text-green-600">
-                          <CheckCircle2 className="h-4 w-4" />
-                          {studentAnswer}
-                        </p>
-                      ) : (
-                        <div className="mt-2 space-y-1.5 text-sm">
-                          <p className="flex items-center gap-1 font-medium text-red-600">
-                            <XCircle className="h-4 w-4" />
-                            إجابتك: {studentAnswer || "لم تُجب"}
-                          </p>
-                          <p className="flex items-center gap-1 text-gray-500">
-                            <CheckCircle2 className="h-4 w-4 text-green-600" />
-                            الصحيح: {q.correctText}
-                          </p>
-                        </div>
-                      )}
+                      <div className="mt-2 space-y-2">
+                        {q.options.map((opt, oi) => {
+                          const isChosen = opt === studentAnswer;
+                          const isRight = opt === q.correctText;
+                          let cls = "border-border text-muted-foreground";
+                          let icon: ReactNode = null;
+                          let tag: ReactNode = null;
+                          if (isRight) {
+                            cls = "border-green-500/50 bg-green-500/10 text-green-700 font-bold";
+                            icon = <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />;
+                            tag = <span className="mr-auto text-[11px] text-green-600">الإجابة الصحيحة</span>;
+                          } else if (isChosen) {
+                            cls = "border-red-500/50 bg-red-500/10 text-red-600 font-bold";
+                            icon = <XCircle className="h-4 w-4 shrink-0 text-red-500" />;
+                            tag = <span className="mr-auto text-[11px] text-red-500">إجابتك</span>;
+                          }
+                          return (
+                            <div key={oi} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${cls}`}>
+                              {icon}
+                              <span>{opt}</span>
+                              {tag}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}
