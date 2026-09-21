@@ -1,33 +1,74 @@
-import { useState } from "react";
+import { useState, type ClipboardEvent } from "react";
 import { toast } from "react-hot-toast";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { Quiz } from "@/types";
+import { compressImage, dataUrlBytes } from "@/lib/image";
+import type { Quiz, QuizQuestion } from "@/types";
 
 export interface QuizPayload {
   subjectId: string;
   title: string;
   description: string;
-  questions: { text: string; options: string[]; correctText: string }[];
+  questions: QuizQuestion[];
   isFree?: boolean;
   isHidden?: boolean;
+}
+
+interface FormOption {
+  id: string;
+  text: string;
+  image?: string;
+}
+
+interface FormQuestion {
+  text: string;
+  image?: string;
+  options: FormOption[];
+  correctId: string;
 }
 
 interface QuizFormState {
   id?: string;
   title: string;
   description: string;
-  questions: { text: string; options: string[]; correctText: string }[];
+  questions: FormQuestion[];
 }
 
-const emptyQuestion = () => ({
+const uid = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
+
+const emptyOption = (): FormOption => ({ id: uid("opt"), text: "", image: undefined });
+
+const emptyQuestion = (): FormQuestion => ({
   text: "",
-  options: ["", "", "", ""],
-  correctText: "",
+  image: undefined,
+  options: [emptyOption(), emptyOption(), emptyOption(), emptyOption()],
+  correctId: "",
 });
+
+const MAX_STORAGE_BYTES = 900_000;
+
+function pickImage(onPicked: (file: File) => void) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.onchange = () => {
+    const f = input.files?.[0];
+    if (f) onPicked(f);
+  };
+  input.click();
+}
+
+async function readImage(file: File, maxW: number): Promise<string> {
+  try {
+    return await compressImage(file, { maxW, quality: 0.72 });
+  } catch {
+    toast.error("تعذر قراءة الصورة");
+    throw new Error("image-read-failed");
+  }
+}
 
 export default function QuizEditorDialog({
   quiz,
@@ -56,15 +97,16 @@ export default function QuizEditorDialog({
           description: quiz.description || "",
           questions: quiz.questions.map((q) => ({
             text: q.text,
-            options: q.options.map((o) => o),
-            correctText: q.correctText,
+            image: q.image ?? undefined,
+            options: q.options.map((o) => ({ id: o.id, text: o.text, image: o.image ?? undefined })),
+            correctId: q.correctId,
           })),
         }
       : { title: "", description: "", questions: [emptyQuestion()] }
   );
   const [saving, setSaving] = useState(false);
 
-  const setQuestion = (idx: number, patch: Partial<QuizFormState["questions"][number]>) => {
+  const setQuestion = (idx: number, patch: Partial<FormQuestion>) => {
     setForm((f) => ({
       ...f,
       questions: f.questions.map((q, i) => (i === idx ? { ...q, ...patch } : q)),
@@ -74,20 +116,50 @@ export default function QuizEditorDialog({
   const addQuestion = () => setForm((f) => ({ ...f, questions: [...f.questions, emptyQuestion()] }));
   const removeQuestion = (idx: number) =>
     setForm((f) => ({ ...f, questions: f.questions.filter((_, i) => i !== idx) }));
-  const setOption = (qi: number, oi: number, value: string) =>
+  const setOption = (qi: number, oi: number, patch: Partial<FormOption>) =>
     setQuestion(qi, {
-      options: form.questions[qi]!.options.map((o, i) => (i === oi ? value : o)),
+      options: form.questions[qi]!.options.map((o, i) => (i === oi ? { ...o, ...patch } : o)),
     });
   const adjustOptions = (qi: number, delta: number) => {
     const q = form.questions[qi]!;
     let options = [...q.options];
     const target = options.length + delta;
     if (target < 2 || target > 4) return;
-    while (options.length < target) options.push("");
+    while (options.length < target) options.push(emptyOption());
     options = options.slice(0, target);
-    let correctText = q.correctText;
-    if (!options.includes(correctText)) correctText = "";
-    setQuestion(qi, { options, correctText });
+    let correctId = q.correctId;
+    if (!options.some((o) => o.id === correctId)) correctId = "";
+    setQuestion(qi, { options, correctId });
+  };
+
+  const addQuestionImage = (qi: number) =>
+    pickImage(async (f) => {
+      const img = await readImage(f, 600);
+      setQuestion(qi, { image: img });
+    });
+  const removeQuestionImage = (qi: number) => setQuestion(qi, { image: undefined });
+
+  const addOptionImage = (qi: number, oi: number) =>
+    pickImage(async (f) => {
+      const img = await readImage(f, 360);
+      setOption(qi, oi, { image: img });
+    });
+  const removeOptionImage = (qi: number, oi: number) => setOption(qi, oi, { image: undefined });
+
+  /** Splits a multiline paste into the answer options (line 1 → option 1, ...). */
+  const splitPasteOptions = (qi: number, e: ClipboardEvent<HTMLInputElement>) => {
+    const lines = e.clipboardData
+      .getData("text")
+      .split(/\r?\n/)
+      .map((s) => s.trim());
+    if (lines.length <= 1) return;
+    e.preventDefault();
+    const clean = lines.filter(Boolean);
+    if (clean.length < 2) return;
+    if (clean.length > 4) toast("أقصى عدد خيارات 4 — سُجلت أول 4 أسطر فقط");
+    const cap = Math.min(clean.length, 4);
+    const options = clean.slice(0, cap).map((t) => ({ id: uid("opt"), text: t, image: undefined }));
+    setQuestion(qi, { options, correctId: "" });
   };
 
   const validate = (): string | null => {
@@ -95,12 +167,18 @@ export default function QuizEditorDialog({
     if (form.questions.length === 0) return "أضف سؤالاً واحداً على الأقل";
     for (let i = 0; i < form.questions.length; i++) {
       const q = form.questions[i]!;
-      if (!q.text.trim()) return `السؤال ${i + 1} بلا نص`;
-      const filled = q.options.filter((o) => o.trim()).length;
-      if (filled < 2) return `السؤال ${i + 1}: تحتاج خيارين ناجحين على الأقل`;
-      const unique = new Set(q.options.map((o) => o.trim()).filter(Boolean));
-      if (unique.size !== filled) return `السؤال ${i + 1}: يوجد خياران متطابقان`;
-      if (!q.options.includes(q.correctText)) return `السؤال ${i + 1}: حدّد الإجابة الصحيحة`;
+      if (!q.text.trim() && !q.image) return `السؤال ${i + 1}: أضف نصاً أو صورة للسؤال`;
+      const filled = q.options.filter((o) => o.text.trim() || o.image).length;
+      if (filled < 2) return `السؤال ${i + 1}: تحتاج خيارين معبّأين على الأقل (نص أو صورة)`;
+      if (!q.options.some((o) => o.id === q.correctId)) return `السؤال ${i + 1}: حدّد الإجابة الصحيحة`;
+    }
+    let totalBytes = 0;
+    for (const q of form.questions) {
+      if (q.image) totalBytes += dataUrlBytes(q.image);
+      for (const o of q.options) if (o.image) totalBytes += dataUrlBytes(o.image);
+    }
+    if (totalBytes > MAX_STORAGE_BYTES) {
+      return "حجم الصور كبير جداً — استخدم صوراً أصغر أو قلّل عددها في الاختبار";
     }
     return null;
   };
@@ -119,8 +197,9 @@ export default function QuizEditorDialog({
         description: form.description.trim(),
         questions: form.questions.map((q) => ({
           text: q.text.trim(),
-          options: q.options.map((o) => o.trim()),
-          correctText: q.correctText.trim(),
+          image: q.image || undefined,
+          options: q.options.map((o) => ({ id: o.id, text: o.text.trim(), image: o.image || undefined })),
+          correctId: q.correctId,
         })),
         isFree: quiz?.isFree ?? true,
         isHidden: quiz?.isHidden ?? false,
@@ -164,7 +243,7 @@ export default function QuizEditorDialog({
 
           <div className="space-y-4">
             {form.questions.map((q, qi) => (
-              <div key={qi} className="rounded-xl border p-3 space-y-3">
+              <div key={qi} className="space-y-3 rounded-xl border p-3">
                 <div className="flex items-center justify-between gap-2">
                   <Label>السؤال {qi + 1}</Label>
                   <div className="flex items-center gap-1">
@@ -194,31 +273,88 @@ export default function QuizEditorDialog({
                     )}
                   </div>
                 </div>
+
                 <Input
                   value={q.text}
                   onChange={(e) => setQuestion(qi, { text: e.target.value })}
-                  placeholder="نص السؤال"
+                  placeholder="نص السؤال (أو اتركه فارغاً إذا استخدمت صورة)"
                 />
-                {q.options.map((opt, oi) => (
-                  <div key={oi} className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name={`correct-${qi}`}
-                      className="w-4 h-4 shrink-0"
-                      style={{ accentColor: subjectColor }}
-                      checked={q.correctText === opt}
-                      onChange={() => setQuestion(qi, { correctText: opt })}
+
+                {q.image ? (
+                  <div className="flex items-center gap-3 rounded-lg border border-dashed p-2">
+                    <img
+                      src={q.image}
+                      alt="صورة السؤال"
+                      className="max-h-40 w-auto max-w-full rounded-md border object-contain"
                     />
-                    <Input
-                      value={opt}
-                      onChange={(e) => setOption(qi, oi, e.target.value)}
-                      placeholder={oi === 0 ? "الخيار الصحيح" : `الخيار ${oi + 1}`}
-                      dir="rtl"
-                    />
+                    <Button type="button" variant="ghost" size="sm" onClick={() => removeQuestionImage(qi)}>
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                      إزالة الصورة
+                    </Button>
                   </div>
-                ))}
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => addQuestionImage(qi)}
+                  >
+                    <ImagePlus className="h-4 w-4" />
+                    إضافة صورة للسؤال
+                  </Button>
+                )}
+
+                <div className="space-y-2">
+                  {q.options.map((opt, oi) => (
+                    <div key={oi} className="space-y-2 rounded-lg border border-dashed p-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name={`correct-${qi}`}
+                          className="h-4 w-4 shrink-0"
+                          style={{ accentColor: subjectColor }}
+                          checked={q.correctId === opt.id}
+                          onChange={() => setQuestion(qi, { correctId: opt.id })}
+                          title="تحديد كإجابة صحيحة"
+                        />
+                        <Input
+                          value={opt.text}
+                          onChange={(e) => setOption(qi, oi, { text: e.target.value })}
+                          onPaste={(e) => splitPasteOptions(qi, e)}
+                          placeholder={oi === 0 ? "الخيار الأول — الصّق 1..4 أسطر لملء الخيارات تلقائياً" : `الخيار ${oi + 1}`}
+                          dir="rtl"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => addOptionImage(qi, oi)}
+                          title="إضافة صورة لهذا الخيار"
+                        >
+                          <ImagePlus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      {opt.image && (
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={opt.image}
+                            alt={`صورة الخيار ${oi + 1}`}
+                            className="h-20 w-auto max-w-[160px] rounded-md border object-contain"
+                          />
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeOptionImage(qi, oi)}>
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                            إزالة
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
                 <p className="text-[11px] text-muted-foreground">
-                  اختر بالدائرة الإجابة الصحيحة (المقارنة تتم بالنص، والخيارات تُخلَّط تلقائياً عند الاختبار).
+                  اختر بالدائرة الإجابة الصحيحة. أضف صورة للخيار أو السؤال متى شئت (تُعرض كاملة بدون قص).
+                  الصق عدة أسطر في أي خيار لملء باقي الخيارات تلقائياً.
                 </p>
               </div>
             ))}

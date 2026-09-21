@@ -803,7 +803,7 @@ export default function SubjectPage() {
     const total = quiz.questions.length;
     let correct = 0;
     for (let qi = 0; qi < total; qi++) {
-      if (answers[qi] === quiz.questions[qi]!.correctText) correct++;
+      if (answers[qi] === quiz.questions[qi]!.correctId) correct++;
     }
     const score = total === 0 ? 0 : Math.round((correct / total) * 100);
     const res = await submitMaterialQuizResult({

@@ -69,10 +69,19 @@ export interface Assessment {
 
 // ─── Challenge (منصة التحدي) ────────────────────────────────
 
+export interface QuizOption {
+  /** Stable identifier used for matching the correct answer (survives shuffling). */
+  id: string;
+  text: string; // may be empty when the option is image-only
+  image?: string; // compressed data URL (object-contain preview, never cropped)
+}
+
 export interface QuizQuestion {
-  text: string;
-  options: string[]; // 2..4
-  correctText: string; // matched by text, not index
+  text: string; // may be empty when the question is image-only
+  image?: string; // compressed data URL (object-contain preview, never cropped)
+  options: QuizOption[]; // 2..4
+  /** id of the correct option (not text, so image-only options work). */
+  correctId: string;
 }
 
 export interface Quiz {

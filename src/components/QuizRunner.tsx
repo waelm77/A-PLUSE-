@@ -171,25 +171,42 @@ export default function QuizRunner({
                   <p className="font-bold mb-3">
                     <span className="text-muted-foreground">{orderIdx + 1}.</span> {q.text}
                   </p>
+                  {q.image && (
+                    <img
+                      src={q.image}
+                      alt="صورة السؤال"
+                      className="mx-auto mb-3 max-h-52 w-auto max-w-full rounded-xl border object-contain"
+                    />
+                  )}
                   <div className="space-y-2">
-                    {optionIds.map((oi) => (
-                      <label
-                        key={oi}
-                        className={`flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer transition-all ${
-                          answers[qi] === q.options[oi] ? "border-primary bg-primary/10" : "hover:bg-muted/50"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name={`answer-${qi}`}
-                          className="w-4 h-4"
-                          checked={answers[qi] === q.options[oi]}
-                          onChange={() => setAnswers((a) => ({ ...a, [qi]: q.options[oi]! }))}
-                          required
-                        />
-                        <span>{q.options[oi]}</span>
-                      </label>
-                    ))}
+                    {optionIds.map((oi) => {
+                      const opt = q.options[oi]!;
+                      return (
+                        <label
+                          key={oi}
+                          className={`flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer transition-all ${
+                            answers[qi] === opt.id ? "border-primary bg-primary/10" : "hover:bg-muted/50"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name={`answer-${qi}`}
+                            className="w-4 h-4"
+                            checked={answers[qi] === opt.id}
+                            onChange={() => setAnswers((a) => ({ ...a, [qi]: opt.id }))}
+                            required
+                          />
+                          {opt.image && (
+                            <img
+                              src={opt.image}
+                              alt={`خيار ${oi + 1}`}
+                              className="max-h-20 w-auto max-w-[120px] rounded-md border object-contain"
+                            />
+                          )}
+                          {opt.text && <span>{opt.text}</span>}
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -238,7 +255,7 @@ export default function QuizRunner({
               <div className="space-y-3">
                 {quiz.questions.map((q, qi) => {
                   const studentAnswer = answers[qi];
-                  const isCorrect = studentAnswer === q.correctText;
+                  const isCorrect = studentAnswer === q.correctId;
                   return (
                     <div
                       key={qi}
@@ -247,10 +264,17 @@ export default function QuizRunner({
                       <p className="font-bold text-sm">
                         <span className="text-muted-foreground">{qi + 1}.</span> {q.text}
                       </p>
+                      {q.image && (
+                        <img
+                          src={q.image}
+                          alt="صورة السؤال"
+                          className="mt-2 max-h-36 w-auto max-w-full rounded-lg border object-contain"
+                        />
+                      )}
                       <div className="mt-2 space-y-2">
                         {q.options.map((opt, oi) => {
-                          const isChosen = opt === studentAnswer;
-                          const isRight = opt === q.correctText;
+                          const isChosen = opt.id === studentAnswer;
+                          const isRight = opt.id === q.correctId;
                           let cls = "border-border text-muted-foreground";
                           let icon: ReactNode = null;
                           let tag: ReactNode = null;
@@ -266,7 +290,14 @@ export default function QuizRunner({
                           return (
                             <div key={oi} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${cls}`}>
                               {icon}
-                              <span>{opt}</span>
+                              {opt.image && (
+                                <img
+                                  src={opt.image}
+                                  alt={`خيار ${oi + 1}`}
+                                  className="h-10 w-auto max-w-[80px] rounded border object-contain"
+                                />
+                              )}
+                              {opt.text && <span>{opt.text}</span>}
                               {tag}
                             </div>
                           );

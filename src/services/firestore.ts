@@ -20,7 +20,7 @@ import {
 } from "firebase/firestore";
 import type { DocumentSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo, Ticker, Admin, DailyVisit, VideoStats, Quiz, QuizResult, StudentMedals, Medal } from "../types";
+import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo, Ticker, Admin, DailyVisit, VideoStats, Quiz, QuizOption, QuizResult, StudentMedals, Medal } from "../types";
 
 const useLocalStorage = false;
 
@@ -1351,6 +1351,56 @@ export async function resetStats(): Promise<void> {
 
 export const MAX_QUIZ_ATTEMPTS = 2;
 
+/**
+ * Upgrades any stored quiz doc into the current question shape.
+ * Legacy docs stored options as plain strings with a text-matched
+ * `correctText`; the new shape uses stable per-option ids and optional
+ * question/option images. Reading-side migration keeps old quizzes working.
+ */
+export function normalizeQuiz(quiz: Quiz): Quiz {
+  const questions = (Array.isArray(quiz.questions) ? quiz.questions : []).map((raw) => {
+    const legacy = raw as unknown as {
+      text?: string;
+      image?: string;
+      options: unknown[];
+      correctText?: string;
+      correctId?: string;
+      optionsImages?: (string | undefined)[];
+    };
+    const optionsArr = Array.isArray(legacy.options) ? legacy.options : [];
+    const isLegacy = optionsArr.length === 0 || typeof optionsArr[0] === "string";
+
+    let options: QuizOption[];
+    let correctId: string;
+
+    if (isLegacy) {
+      const texts = optionsArr as string[];
+      const imgs = Array.isArray(legacy.optionsImages) ? legacy.optionsImages : [];
+      options = texts.map((t, i) => ({ id: `opt_${i}`, text: t || "", image: imgs[i] }));
+      correctId = legacy.correctId ?? "";
+      if (!correctId && legacy.correctText) {
+        const idx = texts.indexOf(legacy.correctText);
+        if (idx >= 0) correctId = `opt_${idx}`;
+      }
+    } else {
+      options = (optionsArr as QuizOption[]).map((opt, i) => ({
+        id: opt && opt.id && opt.id.trim() ? opt.id : `opt_${i}`,
+        text: opt ? opt.text ?? "" : "",
+        image: opt ? opt.image ?? undefined : undefined,
+      }));
+      correctId = legacy.correctId ?? "";
+    }
+
+    return {
+      text: legacy.text ?? "",
+      image: legacy.image ?? undefined,
+      options,
+      correctId,
+    };
+  });
+  return { ...quiz, questions };
+}
+
 function quizResultFromDoc(d: DocumentSnapshot): QuizResult {
   const data = d.data()!;
   return {
@@ -1378,11 +1428,11 @@ export function subscribeQuizzesBySubject(
         snapshot.docs
           .map((d) => {
             const data = d.data();
-            return {
+            return normalizeQuiz({
               id: d.id,
               ...data,
               createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-            } as Quiz;
+            } as Quiz);
           })
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       );
@@ -1622,11 +1672,11 @@ export async function toggleQuizHidden(id: string, isHidden: boolean): Promise<v
 
 function materialQuizFromDoc(d: DocumentSnapshot): Quiz {
   const data = d.data()!;
-  return {
+  return normalizeQuiz({
     id: d.id,
     ...data,
     createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-  } as Quiz;
+  } as Quiz);
 }
 
 export function subscribeMaterialQuizzesBySubject(

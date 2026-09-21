@@ -122,7 +122,7 @@ export default function ChallengeSection({
     const total = activeQuiz?.questions.length ?? 0;
     let correct = 0;
     for (let qi = 0; qi < total; qi++) {
-      if (answers[qi] === activeQuiz!.questions[qi]!.correctText) correct++;
+      if (answers[qi] === activeQuiz!.questions[qi]!.correctId) correct++;
     }
     const score = total === 0 ? 0 : Math.round((correct / total) * 100);
     let saved = true;
