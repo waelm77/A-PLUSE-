@@ -367,13 +367,6 @@ export async function updateSubject(id: string, data: Partial<Omit<Subject, "id"
 }
 
 // Videos
-export async function getAllVideos(): Promise<Video[]> {
-  if (useLocalStorage) {
-    return getLocalItems<Video>("videos");
-  }
-  const snapshot = await getDocs(collection(db, "videos"));
-  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Video));
-}
 
 export async function getVideosBySubject(subjectId: string): Promise<Video[]> {
   if (useLocalStorage) {
