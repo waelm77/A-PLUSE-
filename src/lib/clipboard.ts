@@ -78,6 +78,23 @@ export function hasClipboardImage(ev: { clipboardData: DataTransfer | null }): b
   return hasImage(ev);
 }
 
+/**
+ * Decides whether a paste should be treated as an IMAGE (e.g. a Word/Google
+ * Docs equation). Rich-text copies notoriously ALSO carry an image item on the
+ * Windows clipboard, so a plain text copy must NOT be hijacked into an image —
+ * otherwise multi-line option auto-fill stops working. Image is preferred only
+ * when there is no paste-able text, or when the rich HTML is actually math.
+ */
+export function prefersClipboardImage(
+  ev: { clipboardData: DataTransfer | null },
+  html: string
+): boolean {
+  if (!hasClipboardImage(ev)) return false;
+  const plain = ev.clipboardData?.getData("text") ?? "";
+  if (!plain.trim() && !html.trim()) return true; // image-only paste (photo / equation)
+  return /<math\b|<m:oMath\b|oMath|mml:/i.test(html); // real math markup
+}
+
 /** Returns the first pasted image file, or null. */
 export function getClipboardImageFile(ev: { clipboardData: DataTransfer | null }): File | null {
   const items = ev.clipboardData?.items;

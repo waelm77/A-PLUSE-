@@ -7,8 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { compressImage, dataUrlBytes } from "@/lib/image";
 import {
-  hasClipboardImage,
   getClipboardImageFile,
+  prefersClipboardImage,
   htmlToMarkup,
   htmlToMarkupLines,
 } from "@/lib/clipboard";
@@ -168,55 +168,64 @@ export default function QuizEditorDialog({
     const cap = Math.min(lines.length, 4);
     const options = lines.slice(0, cap).map((t) => ({ id: uid("opt"), text: t, image: undefined }));
     setQuestion(qi, { options, correctId: "" });
+    toast.success("مُلئت الخيارات من الأسطر الملصقة");
   };
 
-  /** Question field paste: image → question image; rich HTML → sub/sup markup. */
+  /** Question field paste: equation image → question image; text → sub/sup markup. */
   const handleQuestionPaste = (qi: number, e: ClipboardEvent<HTMLInputElement>) => {
-    if (hasClipboardImage(e)) {
+    const html = e.clipboardData.getData("text/html");
+    if (prefersClipboardImage(e, html)) {
       e.preventDefault();
       const file = getClipboardImageFile(e);
       if (!file) return;
       void importQuestionImage(qi, file);
       return;
     }
-    const html = e.clipboardData.getData("text/html");
     if (html && html.trim()) {
       e.preventDefault();
       document.execCommand("insertText", false, htmlToMarkup(html));
     }
   };
 
-  /** Option field paste: image → option image; multi-line → auto-fill options. */
+  /** Option field paste: equation image → option image; multi-line → auto-fill options. */
   const handleOptionPaste = (qi: number, oi: number, e: ClipboardEvent<HTMLInputElement>) => {
-    if (hasClipboardImage(e)) {
+    const html = e.clipboardData.getData("text/html");
+    const plain = e.clipboardData.getData("text");
+
+    if (prefersClipboardImage(e, html)) {
       e.preventDefault();
       const file = getClipboardImageFile(e);
       if (!file) return;
       void importOptionImage(qi, oi, file);
       return;
     }
-    const html = e.clipboardData.getData("text/html");
-    if (html && html.trim()) {
-      const lines = htmlToMarkupLines(html);
-      if (lines.length >= 2) {
-        e.preventDefault();
-        fillOptionsFromLines(qi, lines);
-      } else if (lines.length === 1) {
-        e.preventDefault();
-        document.execCommand("insertText", false, lines[0]!);
-      }
-      return;
-    }
-    // Plain-text fallback (clipboard has no rich HTML).
-    const lines = e.clipboardData
-      .getData("text")
+
+    // Pick the richest multi-line source (rich HTML keeps sub/sup markup when
+    // available, otherwise fall back to the plain-text lines).
+    const htmlLines = html && html.trim() ? htmlToMarkupLines(html) : [];
+    const plainLines = plain
       .split(/\r?\n/)
       .map((s) => s.trim())
       .filter(Boolean);
+    const lines =
+      htmlLines.length >= 2 ? htmlLines : plainLines.length >= 2 ? plainLines : [];
+
     if (lines.length >= 2) {
       e.preventDefault();
       fillOptionsFromLines(qi, lines);
+      return;
     }
+
+    // Single-line paste: preserve sub/sup markup when rich HTML is available.
+    if (html && html.trim()) {
+      const markup = htmlToMarkup(html).replace(/\s+/g, " ").trim();
+      if (markup) {
+        e.preventDefault();
+        document.execCommand("insertText", false, markup);
+      }
+      return;
+    }
+    // Plain single line → default browser paste.
   };
 
   const validate = (): string | null => {
