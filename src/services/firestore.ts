@@ -398,6 +398,24 @@ function clean<T extends Record<string, unknown>>(obj: T): T {
   return cleaned as T;
 }
 
+/** Recursively removes `undefined` values from nested objects/arrays.
+ *  Firestore rejects any field set to `undefined` (even nested), so quiz
+ *  payloads that carry `image?: undefined` must be sanitized before writing. */
+function deepClean<T>(value: T): T {
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) {
+    return value
+      .filter((v) => v !== undefined)
+      .map((v) => deepClean(v)) as unknown as T;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+    if (v === undefined) continue;
+    out[key] = deepClean(v);
+  }
+  return out as T;
+}
+
 export async function createVideo(data: Omit<Video, "id" | "createdAt">): Promise<Video> {
   if (useLocalStorage) {
     const items = getLocalItems<Video>("videos");
@@ -1626,6 +1644,7 @@ export async function submitQuizResult(input: {
 }
 
 export async function createQuiz(data: Omit<Quiz, "id" | "createdAt">): Promise<Quiz> {
+  const cleaned = deepClean({ ...data });
   const quizzesCol = collection(db, "quizzes");
   const ref = doc(quizzesCol);
   const counterRef = doc(db, "counters", `quizzes:${data.subjectId}`);
@@ -1634,18 +1653,18 @@ export async function createQuiz(data: Omit<Quiz, "id" | "createdAt">): Promise<
     const next = (counter.data()?.value as number ?? 0) + 1;
     tx.set(counterRef, { value: next });
     tx.set(ref, {
-      ...data,
-      isFree: data.isFree ?? true,
+      ...cleaned,
+      isFree: cleaned.isFree ?? true,
       order: next,
       createdAt: serverTimestamp(),
     });
     return next;
   });
-  return { id: ref.id, ...data, isFree: data.isFree ?? true, order, createdAt: new Date().toISOString() };
+  return { id: ref.id, ...cleaned, isFree: cleaned.isFree ?? true, order, createdAt: new Date().toISOString() };
 }
 
 export async function updateQuiz(id: string, data: Partial<Omit<Quiz, "id" | "createdAt">>): Promise<void> {
-  await updateDoc(doc(db, "quizzes", id), data);
+  await updateDoc(doc(db, "quizzes", id), deepClean({ ...data }));
 }
 
 export async function deleteQuiz(id: string): Promise<void> {
@@ -1770,6 +1789,7 @@ export async function submitMaterialQuizResult(input: {
 }
 
 export async function createMaterialQuiz(data: Omit<Quiz, "id" | "createdAt">): Promise<Quiz> {
+  const cleaned = deepClean({ ...data });
   const col = collection(db, "materialQuizzes");
   const ref = doc(col);
   const counterRef = doc(db, "counters", `materialQuizzes:${data.subjectId}`);
@@ -1778,18 +1798,18 @@ export async function createMaterialQuiz(data: Omit<Quiz, "id" | "createdAt">): 
     const next = (counter.data()?.value as number ?? 0) + 1;
     tx.set(counterRef, { value: next });
     tx.set(ref, {
-      ...data,
-      isFree: data.isFree ?? true,
+      ...cleaned,
+      isFree: cleaned.isFree ?? true,
       order: next,
       createdAt: serverTimestamp(),
     });
     return next;
   });
-  return { id: ref.id, ...data, isFree: data.isFree ?? true, order, createdAt: new Date().toISOString() };
+  return { id: ref.id, ...cleaned, isFree: cleaned.isFree ?? true, order, createdAt: new Date().toISOString() };
 }
 
 export async function updateMaterialQuiz(id: string, data: Partial<Omit<Quiz, "id" | "createdAt">>): Promise<void> {
-  await updateDoc(doc(db, "materialQuizzes", id), data);
+  await updateDoc(doc(db, "materialQuizzes", id), deepClean({ ...data }));
 }
 
 export async function deleteMaterialQuiz(id: string): Promise<void> {
