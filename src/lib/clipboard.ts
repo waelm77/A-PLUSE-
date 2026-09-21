@@ -45,6 +45,19 @@ function convertNode(node: Node, out: string[]) {
     if (!endsWithNewline(out)) out.push("\n");
     return;
   }
+  // OMML/MathML sub/superscript runs inside equations (m:sub, m:sup).
+  if (tag === "m:sub" || tag === "msub") {
+    out.push("~");
+    for (const c of Array.from(el.childNodes)) convertNode(c, out);
+    out.push("~");
+    return;
+  }
+  if (tag === "m:sup" || tag === "msup") {
+    out.push("^");
+    for (const c of Array.from(el.childNodes)) convertNode(c, out);
+    out.push("^");
+    return;
+  }
   if (tag === "sub" || vAlign === "sub") {
     out.push("~");
     for (const c of Array.from(el.childNodes)) convertNode(c, out);
@@ -81,11 +94,11 @@ export function hasClipboardImage(ev: { clipboardData: DataTransfer | null }): b
 }
 
 /**
- * Decides whether a paste should be treated as an IMAGE (e.g. a Word/Google
- * Docs equation). Rich-text copies notoriously ALSO carry an image item on the
- * Windows clipboard, so a plain text copy must NOT be hijacked into an image —
- * otherwise multi-line option auto-fill stops working. Image is preferred only
- * when there is no paste-able text, or when the rich HTML is actually math.
+ * Decides whether a paste should be treated as an IMAGE. Rich-text copies
+ * notoriously ALSO carry an image item on the Windows clipboard, so an image is
+ * preferred ONLY when there is no paste-able text at all (screenshot / pasted
+ * photo / older-embedded equation). Textual copies (including Word sub/sup or
+ * equations) go through the markup path so the quiz can render a real preview.
  */
 export function prefersClipboardImage(
   ev: { clipboardData: DataTransfer | null },
@@ -93,8 +106,7 @@ export function prefersClipboardImage(
 ): boolean {
   if (!hasClipboardImage(ev)) return false;
   const plain = ev.clipboardData?.getData("text") ?? "";
-  if (!plain.trim() && !html.trim()) return true; // image-only paste (photo / equation)
-  return /<math\b|<m:oMath\b|oMath|mml:/i.test(html); // real math markup
+  return !plain.trim() && !html.trim();
 }
 
 /** Returns the first pasted image file, or null. */
