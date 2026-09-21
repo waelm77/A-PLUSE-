@@ -765,31 +765,23 @@ export default function SubjectPage() {
 
   const handleMaterialQuizSave = async (payload: QuizPayload, existingId?: string) => {
     if (!id) return;
-    try {
-      if (existingId) {
-        await updateMaterialQuiz(existingId, payload);
-        toast.success("تم حفظ تعديلات الاختبار");
-      } else {
-        await createMaterialQuiz(payload);
-        toast.success("تمت إضافة الاختبار التفاعلي");
-      }
-    } catch {
-      toast.error("حدث خطأ أثناء حفظ الاختبار");
+    if (existingId) {
+      await updateMaterialQuiz(existingId, payload);
+      toast.success("تم حفظ تعديلات الاختبار");
+    } else {
+      await createMaterialQuiz(payload);
+      toast.success("تمت إضافة الاختبار التفاعلي");
     }
   };
 
   const handleChallengeQuizSave = async (payload: QuizPayload, existingId?: string) => {
     if (!id) return;
-    try {
-      if (existingId) {
-        await updateQuiz(existingId, payload);
-        toast.success("تم حفظ تعديلات اختبار التحدي");
-      } else {
-        await createQuiz(payload);
-        toast.success("تمت إضافة اختبار التحدي (يظهر في ساحة التحدي بعد تفعيلها)");
-      }
-    } catch {
-      toast.error("حدث خطأ أثناء حفظ الاختبار");
+    if (existingId) {
+      await updateQuiz(existingId, payload);
+      toast.success("تم حفظ تعديلات اختبار التحدي");
+    } else {
+      await createQuiz(payload);
+      toast.success("تمت إضافة اختبار التحدي (يظهر في ساحة التحدي بعد تفعيلها)");
     }
   };
 

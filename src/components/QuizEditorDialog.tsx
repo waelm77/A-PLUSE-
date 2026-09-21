@@ -13,7 +13,7 @@ import {
   htmlToMarkupLines,
 } from "@/lib/clipboard";
 import RichText from "@/components/RichText";
-import type { Quiz, QuizQuestion } from "@/types";
+import type { Quiz, QuizQuestion, QuizOption } from "@/types";
 
 export interface QuizPayload {
   subjectId: string;
@@ -252,12 +252,19 @@ export default function QuizEditorDialog({
         subjectId,
         title: form.title.trim(),
         description: form.description.trim(),
-        questions: form.questions.map((q) => ({
-          text: q.text.trim(),
-          image: q.image || undefined,
-          options: q.options.map((o) => ({ id: o.id, text: o.text.trim(), image: o.image || undefined })),
-          correctId: q.correctId,
-        })),
+        questions: form.questions.map((q) => {
+          const question: QuizQuestion = {
+            text: q.text.trim(),
+            correctId: q.correctId,
+            options: q.options.map((o) => {
+              const opt: QuizOption = { id: o.id, text: o.text.trim() };
+              if (o.image) opt.image = o.image;
+              return opt;
+            }),
+          };
+          if (q.image) question.image = q.image;
+          return question;
+        }),
         isFree: quiz?.isFree ?? true,
         isHidden: quiz?.isHidden ?? false,
       };
@@ -265,8 +272,9 @@ export default function QuizEditorDialog({
       onSaved();
       onClose();
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
       console.error("Save quiz error:", e);
-      toast.error("حدث خطأ أثناء حفظ الاختبار");
+      toast.error(`حدث خطأ أثناء حفظ الاختبار — ${msg}`);
     } finally {
       setSaving(false);
     }
