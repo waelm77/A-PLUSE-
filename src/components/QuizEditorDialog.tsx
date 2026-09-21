@@ -6,6 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { compressImage, dataUrlBytes } from "@/lib/image";
+import {
+  hasClipboardImage,
+  getClipboardImageFile,
+  htmlToMarkup,
+  htmlToMarkupLines,
+} from "@/lib/clipboard";
+import RichText from "@/components/RichText";
 import type { Quiz, QuizQuestion } from "@/types";
 
 export interface QuizPayload {
@@ -132,34 +139,84 @@ export default function QuizEditorDialog({
     setQuestion(qi, { options, correctId });
   };
 
-  const addQuestionImage = (qi: number) =>
-    pickImage(async (f) => {
-      const img = await readImage(f, 600);
-      setQuestion(qi, { image: img });
-    });
+  const importQuestionImage = (qi: number, f: File) =>
+    readImage(f, 600)
+      .then((img) => {
+        setQuestion(qi, { image: img });
+        toast.success("أُضيفت الصورة إلى السؤال");
+      })
+      .catch(() => {});
+
+  const importOptionImage = (qi: number, oi: number, f: File) =>
+    readImage(f, 360)
+      .then((img) => {
+        setOption(qi, oi, { image: img });
+        toast.success("أُضيفت الصورة إلى الخيار");
+      })
+      .catch(() => {});
+
+  const addQuestionImage = (qi: number) => pickImage((f) => void importQuestionImage(qi, f));
   const removeQuestionImage = (qi: number) => setQuestion(qi, { image: undefined });
 
-  const addOptionImage = (qi: number, oi: number) =>
-    pickImage(async (f) => {
-      const img = await readImage(f, 360);
-      setOption(qi, oi, { image: img });
-    });
+  const addOptionImage = (qi: number, oi: number) => pickImage((f) => void importOptionImage(qi, oi, f));
   const removeOptionImage = (qi: number, oi: number) => setOption(qi, oi, { image: undefined });
 
-  /** Splits a multiline paste into the answer options (line 1 → option 1, ...). */
-  const splitPasteOptions = (qi: number, e: ClipboardEvent<HTMLInputElement>) => {
+  /** Fills up to 4 option fields from 2..4 markup lines (drop the rest). */
+  const fillOptionsFromLines = (qi: number, lines: string[]) => {
+    if (lines.length < 2) return;
+    if (lines.length > 4) toast("أقصى عدد خيارات 4 — سُجلت أول 4 أسطر فقط");
+    const cap = Math.min(lines.length, 4);
+    const options = lines.slice(0, cap).map((t) => ({ id: uid("opt"), text: t, image: undefined }));
+    setQuestion(qi, { options, correctId: "" });
+  };
+
+  /** Question field paste: image → question image; rich HTML → sub/sup markup. */
+  const handleQuestionPaste = (qi: number, e: ClipboardEvent<HTMLInputElement>) => {
+    if (hasClipboardImage(e)) {
+      e.preventDefault();
+      const file = getClipboardImageFile(e);
+      if (!file) return;
+      void importQuestionImage(qi, file);
+      return;
+    }
+    const html = e.clipboardData.getData("text/html");
+    if (html && html.trim()) {
+      e.preventDefault();
+      document.execCommand("insertText", false, htmlToMarkup(html));
+    }
+  };
+
+  /** Option field paste: image → option image; multi-line → auto-fill options. */
+  const handleOptionPaste = (qi: number, oi: number, e: ClipboardEvent<HTMLInputElement>) => {
+    if (hasClipboardImage(e)) {
+      e.preventDefault();
+      const file = getClipboardImageFile(e);
+      if (!file) return;
+      void importOptionImage(qi, oi, file);
+      return;
+    }
+    const html = e.clipboardData.getData("text/html");
+    if (html && html.trim()) {
+      const lines = htmlToMarkupLines(html);
+      if (lines.length >= 2) {
+        e.preventDefault();
+        fillOptionsFromLines(qi, lines);
+      } else if (lines.length === 1) {
+        e.preventDefault();
+        document.execCommand("insertText", false, lines[0]!);
+      }
+      return;
+    }
+    // Plain-text fallback (clipboard has no rich HTML).
     const lines = e.clipboardData
       .getData("text")
       .split(/\r?\n/)
-      .map((s) => s.trim());
-    if (lines.length <= 1) return;
-    e.preventDefault();
-    const clean = lines.filter(Boolean);
-    if (clean.length < 2) return;
-    if (clean.length > 4) toast("أقصى عدد خيارات 4 — سُجلت أول 4 أسطر فقط");
-    const cap = Math.min(clean.length, 4);
-    const options = clean.slice(0, cap).map((t) => ({ id: uid("opt"), text: t, image: undefined }));
-    setQuestion(qi, { options, correctId: "" });
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (lines.length >= 2) {
+      e.preventDefault();
+      fillOptionsFromLines(qi, lines);
+    }
   };
 
   const validate = (): string | null => {
@@ -277,8 +334,19 @@ export default function QuizEditorDialog({
                 <Input
                   value={q.text}
                   onChange={(e) => setQuestion(qi, { text: e.target.value })}
+                  onPaste={(e) => handleQuestionPaste(qi, e)}
                   placeholder="نص السؤال (أو اتركه فارغاً إذا استخدمت صورة)"
+                  dir="auto"
                 />
+
+                {q.text.trim() && (
+                  <p
+                    dir="auto"
+                    className="rounded-md bg-muted/40 px-2 py-1 text-xs text-muted-foreground break-words"
+                  >
+                    <RichText text={q.text} />
+                  </p>
+                )}
 
                 {q.image ? (
                   <div className="flex items-center gap-3 rounded-lg border border-dashed p-2">
@@ -321,7 +389,7 @@ export default function QuizEditorDialog({
                         <Input
                           value={opt.text}
                           onChange={(e) => setOption(qi, oi, { text: e.target.value })}
-                          onPaste={(e) => splitPasteOptions(qi, e)}
+                          onPaste={(e) => handleOptionPaste(qi, oi, e)}
                           placeholder={oi === 0 ? "الخيار الأول — الصّق 1..4 أسطر لملء الخيارات تلقائياً" : `الخيار ${oi + 1}`}
                           dir="rtl"
                         />
@@ -335,6 +403,14 @@ export default function QuizEditorDialog({
                           <ImagePlus className="h-4 w-4" />
                         </Button>
                       </div>
+                      {opt.text.trim() && (
+                        <p
+                          dir="auto"
+                          className="rounded-md bg-muted/40 px-2 py-1 text-xs text-muted-foreground break-words"
+                        >
+                          <RichText text={opt.text} />
+                        </p>
+                      )}
                       {opt.image && (
                         <div className="flex items-center gap-3">
                           <img

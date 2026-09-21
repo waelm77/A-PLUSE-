@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import RichText from "@/components/RichText";
 import type { Quiz } from "@/types";
 
 export interface QuizOutcome {
@@ -168,8 +169,8 @@ export default function QuizRunner({
               const optionIds = attempt.optOrders[qi]!;
               return (
                 <div key={qi} className="rounded-xl border p-4">
-                  <p className="font-bold mb-3">
-                    <span className="text-muted-foreground">{orderIdx + 1}.</span> {q.text}
+                  <p className="font-bold mb-3" dir="auto">
+                    <span className="text-muted-foreground">{orderIdx + 1}.</span> <RichText text={q.text} />
                   </p>
                   {q.image && (
                     <img
@@ -203,7 +204,7 @@ export default function QuizRunner({
                               className="max-h-20 w-auto max-w-[120px] rounded-md border object-contain"
                             />
                           )}
-                          {opt.text && <span>{opt.text}</span>}
+                          {opt.text && <RichText text={opt.text} />}
                         </label>
                       );
                     })}
@@ -261,8 +262,8 @@ export default function QuizRunner({
                       key={qi}
                       className={`rounded-xl border p-3 ${isCorrect ? "border-green-500/40" : "border-red-500/30"}`}
                     >
-                      <p className="font-bold text-sm">
-                        <span className="text-muted-foreground">{qi + 1}.</span> {q.text}
+                      <p className="font-bold text-sm" dir="auto">
+                        <span className="text-muted-foreground">{qi + 1}.</span> <RichText text={q.text} />
                       </p>
                       {q.image && (
                         <img
@@ -297,7 +298,7 @@ export default function QuizRunner({
                                   className="h-10 w-auto max-w-[80px] rounded border object-contain"
                                 />
                               )}
-                              {opt.text && <span>{opt.text}</span>}
+{opt.text && <RichText text={opt.text} />}
                               {tag}
                             </div>
                           );
