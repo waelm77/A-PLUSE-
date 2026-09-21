@@ -12,7 +12,7 @@ import {
   htmlToMarkup,
   chooseOptionLines,
 } from "@/lib/clipboard";
-import RichText from "@/components/RichText";
+import MathTextInput from "@/components/MathTextInput";
 import type { Quiz, QuizQuestion, QuizOption } from "@/types";
 
 export interface QuizPayload {
@@ -347,22 +347,13 @@ export default function QuizEditorDialog({
                   </div>
                 </div>
 
-                <Input
+                <MathTextInput
                   value={q.text}
-                  onChange={(e) => setQuestion(qi, { text: e.target.value })}
+                  onChange={(v) => setQuestion(qi, { text: v })}
                   onPaste={(e) => handleQuestionPaste(qi, e)}
                   placeholder="نص السؤال (أو اتركه فارغاً إذا استخدمت صورة)"
                   dir="auto"
                 />
-
-                {q.text.trim() && (
-                  <p
-                    dir="auto"
-                    className="rounded-md bg-muted/40 px-2 py-1 text-xs text-muted-foreground break-words"
-                  >
-                    <RichText text={q.text} />
-                  </p>
-                )}
 
                 {q.image ? (
                   <div className="flex items-center gap-3 rounded-lg border border-dashed p-2">
@@ -402,12 +393,11 @@ export default function QuizEditorDialog({
                           onChange={() => setQuestion(qi, { correctId: opt.id })}
                           title="تحديد كإجابة صحيحة"
                         />
-                        <Input
+                        <MathTextInput
                           value={opt.text}
-                          onChange={(e) => setOption(qi, oi, { text: e.target.value })}
+                          onChange={(v) => setOption(qi, oi, { text: v })}
                           onPaste={(e) => handleOptionPaste(qi, oi, e)}
                           placeholder={oi === 0 ? "الخيار الأول — الصّق 1..4 أسطر لملء الخيارات تلقائياً" : `الخيار ${oi + 1}`}
-                          dir="rtl"
                         />
                         <Button
                           type="button"
@@ -419,14 +409,6 @@ export default function QuizEditorDialog({
                           <ImagePlus className="h-4 w-4" />
                         </Button>
                       </div>
-                      {opt.text.trim() && (
-                        <p
-                          dir="auto"
-                          className="rounded-md bg-muted/40 px-2 py-1 text-xs text-muted-foreground break-words"
-                        >
-                          <RichText text={opt.text} />
-                        </p>
-                      )}
                       {opt.image && (
                         <div className="flex items-center gap-3">
                           <img
