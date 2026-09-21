@@ -29,7 +29,9 @@ function endsWithNewline(out: string[]): boolean {
 
 function convertNode(node: Node, out: string[]) {
   if (node.nodeType === Node.TEXT_NODE) {
-    const t = node.textContent?.replace(/\u00a0/g, " ") ?? "";
+    const t = (node.textContent ?? "")
+      .replace(/\u00a0/g, " ")
+      .replace(/[\r\n\t\f\v\u2028\u2029]+/g, " ");
     if (t) out.push(t);
     return;
   }
@@ -116,7 +118,34 @@ export function htmlToMarkup(html: string): string {
 /** Converts clipboard HTML into trimmed markup lines (used to auto-fill options). */
 export function htmlToMarkupLines(html: string): string[] {
   return htmlToMarkup(html)
-    .split("\n")
+    .split(/\r\n|\r|\n|\u2028|\u2029/)
     .map((s) => s.replace(/\s+/g, " ").trim())
     .filter(Boolean);
+}
+
+/** Splits plain clipboard text into trimmed lines (used to auto-fill options). */
+export function plainTextLines(plain: string): string[] {
+  return plain
+    .split(/\r\n|\r|\n|\u2028|\u2029/)
+    .map((s) => s.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
+/**
+ * Chooses the most faithful set of lines (2..4) to auto-fill the option
+ * fields. Rich HTML is only preferred when it produces exactly the same number
+ * of complete lines as the plain-text copy (the plain text never splits a
+ * logical line — Word HTML sometimes splits one visible line into several
+ * fragments, which would otherwise truncate the options). Falls back to plain
+ * text whenever the two disagree, and to HTML otherwise.
+ */
+export function chooseOptionLines(html: string, plain: string): string[] {
+  const htmlLines = html && html.trim() ? htmlToMarkupLines(html) : [];
+  const plainLines = plainTextLines(plain);
+  const take = (xs: string[]) => xs.slice(0, 4);
+  if (htmlLines.length >= 2 && htmlLines.length === plainLines.length) {
+    return take(htmlLines); // markup (^…^ / ~…~) preserved, lines complete
+  }
+  if (plainLines.length >= 2) return take(plainLines);
+  return take(htmlLines);
 }

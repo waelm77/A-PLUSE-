@@ -10,7 +10,7 @@ import {
   getClipboardImageFile,
   prefersClipboardImage,
   htmlToMarkup,
-  htmlToMarkupLines,
+  chooseOptionLines,
 } from "@/lib/clipboard";
 import RichText from "@/components/RichText";
 import type { Quiz, QuizQuestion, QuizOption } from "@/types";
@@ -171,14 +171,21 @@ export default function QuizEditorDialog({
     toast.success("مُلئت الخيارات من الأسطر الملصقة");
   };
 
-  /** Question field paste: equation image → question image; text → sub/sup markup. */
+  /** Question field paste: equation image → question image; 2..4 lines → fill options. */
   const handleQuestionPaste = (qi: number, e: ClipboardEvent<HTMLInputElement>) => {
     const html = e.clipboardData.getData("text/html");
+    const plain = e.clipboardData.getData("text");
     if (prefersClipboardImage(e, html)) {
       e.preventDefault();
       const file = getClipboardImageFile(e);
       if (!file) return;
       void importQuestionImage(qi, file);
+      return;
+    }
+    const fill = chooseOptionLines(html || "", plain || "");
+    if (fill.length >= 2) {
+      e.preventDefault();
+      fillOptionsFromLines(qi, fill);
       return;
     }
     if (html && html.trim()) {
@@ -200,19 +207,11 @@ export default function QuizEditorDialog({
       return;
     }
 
-    // Pick the richest multi-line source (rich HTML keeps sub/sup markup when
-    // available, otherwise fall back to the plain-text lines).
-    const htmlLines = html && html.trim() ? htmlToMarkupLines(html) : [];
-    const plainLines = plain
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const lines =
-      htmlLines.length >= 2 ? htmlLines : plainLines.length >= 2 ? plainLines : [];
+    const fill = chooseOptionLines(html || "", plain || "");
 
-    if (lines.length >= 2) {
+    if (fill.length >= 2) {
       e.preventDefault();
-      fillOptionsFromLines(qi, lines);
+      fillOptionsFromLines(qi, fill);
       return;
     }
 
