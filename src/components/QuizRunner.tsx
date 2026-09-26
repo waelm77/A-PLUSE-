@@ -152,8 +152,9 @@ export default function QuizRunner({
         onContextMenu={(e) => e.preventDefault()}
         onDragStart={(e) => e.preventDefault()}
       >
-        <QuizWatermark />
-        <DialogHeader>
+        <div className="relative">
+          <QuizWatermark />
+          <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ClipboardCheck className="h-5 w-5" style={{ color: subjectColor }} />
             {quiz.title}
@@ -328,6 +329,7 @@ export default function QuizRunner({
             {attemptBanner()}
           </div>
         )}
+        </div>
       </DialogContent>
     </Dialog>
   );

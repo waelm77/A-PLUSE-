@@ -1,14 +1,25 @@
 import { useAuthStore } from "@/store/authStore";
 
-const TILE_COUNT = 24;
-
 /**
- * Diagonal watermark shown over the quiz dialog while a student is solving:
- *   «لا أحلل نشره أو تداوله»
- *   «اسم الطالب»
- * It travels with the scrollable content (covers every question) and never
- * blocks clicks (pointer-events-none). No watermark for admins/guests.
+ * Diagonal watermark repeated over the WHOLE quiz dialog (covers every
+ * question as the student scrolls, not just the first viewport):
+ *   «لا أحلل نشره أو تداوله»   (top line)
+ *   «اسم الطالب»              (below it)
+ * Implemented as a tiled SVG background so density is uniform for any content
+ * height, pointer-events-none so it never blocks clicks. Admins/guests (no
+ * student session) get no watermark.
  */
+function watermarkTile(name: string): string {
+  const safe = name.replace(/["'<>]/g, "").slice(0, 40);
+  const svg = [
+    '<svg xmlns="http://www.w3.org/2000/svg" width="260" height="190" viewBox="0 0 260 190">',
+    '<text x="130" y="80" text-anchor="middle" fill="rgba(113,113,122,0.18)" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" transform="rotate(-30 130 80)">لا أحلل نشره أو تداوله</text>',
+    `<text x="130" y="112" text-anchor="middle" fill="rgba(113,113,122,0.24)" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="900" transform="rotate(-30 130 112)">\u00AB${safe}\u00BB</text>`,
+    "</svg>",
+  ].join("");
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg).replace(/'/g, "%27")}`;
+}
+
 export default function QuizWatermark() {
   const name = useAuthStore((s) => s.studentSession?.displayName)?.trim();
   if (!name) return null;
@@ -16,14 +27,8 @@ export default function QuizWatermark() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute -inset-16 z-10 flex flex-wrap content-center items-center justify-center gap-x-8 gap-y-6 overflow-hidden rotate-[-30deg] select-none"
-    >
-      {Array.from({ length: TILE_COUNT }).map((_, i) => (
-        <span key={i} className="flex flex-col items-center gap-1 whitespace-nowrap">
-          <span className="text-sm font-bold text-foreground/10">لا أحلل نشره أو تداوله</span>
-          <span className="text-xl font-black text-foreground/15">«{name}»</span>
-        </span>
-      ))}
-    </div>
+      className="pointer-events-none absolute -inset-2 z-10 select-none"
+      style={{ backgroundImage: `url("${watermarkTile(name)}")`, backgroundRepeat: "repeat" }}
+    />
   );
 }
