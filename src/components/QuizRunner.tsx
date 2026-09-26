@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import RichText from "@/components/RichText";
+import QuizWatermark from "@/components/QuizWatermark";
 import type { Quiz } from "@/types";
 
 export interface QuizOutcome {
@@ -145,7 +146,13 @@ export default function QuizRunner({
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto" dir="rtl">
+      <DialogContent
+        className="max-w-2xl max-h-[88vh] overflow-y-auto select-none"
+        dir="rtl"
+        onContextMenu={(e) => e.preventDefault()}
+        onDragStart={(e) => e.preventDefault()}
+      >
+        <QuizWatermark />
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ClipboardCheck className="h-5 w-5" style={{ color: subjectColor }} />
