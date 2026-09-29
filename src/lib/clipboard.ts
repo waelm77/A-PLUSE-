@@ -3,7 +3,8 @@
 // (Insert → Equation) it also places a rendered PNG image. These helpers:
 //   • detect/prefer pasted images (so Word equations arrive as pictures),
 //   • translate HTML <sub>/<sup> (and vertical-align styles) into the safe
-//     in-app markup ^…^ / ~…~ used by <RichText/>.
+//     in-app markup ^…^ / ~…~ used by <RichText/>, plus <b>/<strong> → **…**
+//     and red foreground colours → ##…## (bold/red keywords survive a paste).
 
 const BLOCK_TAGS = new Set([
   "p",
@@ -25,6 +26,30 @@ const BLOCK_TAGS = new Set([
 
 function endsWithNewline(out: string[]): boolean {
   return out.length > 0 && out[out.length - 1]!.endsWith("\n");
+}
+
+/** True when an element's foreground colour reads as red (Word/web highlight). */
+function elementColorIsRed(el: Element): boolean {
+  const raw =
+    (el as HTMLElement | null)?.style?.color?.trim() || el.getAttribute("color")?.trim() || "";
+  const v = raw.toLowerCase();
+  if (v === "red" || v === "maroon" || v === "darkred" || v === "crimson") return true;
+  let hex = v.replace(/^#/, "");
+  if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+  if (/^[0-9a-f]{6}$/.test(hex)) {
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return r > 130 && g < 110 && b < 110;
+  }
+  const m = v.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (m) {
+    const r = +m[1]!;
+    const g = +m[2]!;
+    const b = +m[3]!;
+    return r > 130 && g < 110 && b < 110;
+  }
+  return false;
 }
 
 function convertNode(node: Node, out: string[]) {
@@ -68,6 +93,16 @@ function convertNode(node: Node, out: string[]) {
     out.push("^");
     for (const c of Array.from(el.childNodes)) convertNode(c, out);
     out.push("^");
+    return;
+  }
+  const isBold = tag === "b" || tag === "strong";
+  const isRed = elementColorIsRed(el);
+  if (isBold || isRed) {
+    if (isRed) out.push("##");
+    if (isBold) out.push("**");
+    for (const c of Array.from(el.childNodes)) convertNode(c, out);
+    if (isBold) out.push("**");
+    if (isRed) out.push("##");
     return;
   }
   if (BLOCK_TAGS.has(tag)) {

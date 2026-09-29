@@ -2485,11 +2485,11 @@ function MaterialQuizCard({
               <Button
                 size="sm"
                 variant="ghost"
-                className={`p-2 h-auto ${!quiz.isFree ? 'text-green-600 hover:bg-green-50' : 'text-orange-600 hover:bg-orange-50'}`}
+                className={`p-2 h-auto ${quiz.isFree ? 'text-green-600 hover:bg-green-50' : 'text-orange-600 hover:bg-orange-50'}`}
                 onClick={() => onToggleFree(quiz)}
                 title={quiz.isFree ? 'تحويل للمشتركين فقط' : 'تحويل لمجاني'}
               >
-                {quiz.isFree ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                {quiz.isFree ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
               </Button>
               <Button
                 size="sm"

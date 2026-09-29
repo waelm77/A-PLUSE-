@@ -1,26 +1,31 @@
 import type { ReactNode } from "react";
 
 // Tiny safe renderer for the quiz markup and Unicode math runs:
-//   ^text^  →  superscript        (e.g. 10^-3^)
-//   ~text~  →  subscript          (e.g. H~2~O)
-// Literal Unicode super/subscripts (H₂O, 10⁻³, ², ₄ …) also render correctly.
-// Renders plain React elements only — never dangerouslySetInnerHTML.
-// Lone ^ or ~ (unpaired) stay as literal characters.
+//   **text** → bold
+//   ##text## → red (e.g. keyword in a question)
+//   ^text^   → superscript        (e.g. 10^-3^)
+//   ~text~   → subscript          (e.g. H~2~O)
+// All markers nest (##**مهم**## , ^~n~^ …). Literal Unicode super/subscripts
+// (H₂O, 10⁻³, ², ₄ …) also render correctly. Renders plain React elements only
+// — never dangerouslySetInnerHTML. Lone ^ / ~ / ** / ## (unpaired) stay as
+// literal characters.
 
 const SUPERSCRIPTS = new Set("⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿªº");
 const SUBSCRIPTS = new Set("₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓ");
 
-function wrapUnicodeRuns(seg: string, baseKey: number): ReactNode[] {
+const RED = "#dc2626";
+
+function wrapUnicodeRuns(seg: string, keyBase: { n: number }): ReactNode[] {
   const out: ReactNode[] = [];
   let run: string[] = [];
   let mode: "sup" | "sub" | null = null;
-  let key = baseKey;
 
   const flushRun = () => {
     if (!run.length) return;
-    if (mode === "sup") out.push(<sup key={`u${key++}`}>{run.join("")}</sup>);
-    else if (mode === "sub") out.push(<sub key={`u${key++}`}>{run.join("")}</sub>);
-    else out.push(<span key={`u${key++}`}>{run.join("")}</span>);
+    const node = run.join("");
+    if (mode === "sup") out.push(<sup key={`u${keyBase.n++}`}>{node}</sup>);
+    else if (mode === "sub") out.push(<sub key={`u${keyBase.n++}`}>{node}</sub>);
+    else out.push(<span key={`u${keyBase.n++}`}>{node}</span>);
     run = [];
   };
 
@@ -40,21 +45,44 @@ function wrapUnicodeRuns(seg: string, baseKey: number): ReactNode[] {
   return out;
 }
 
-function parseSegments(text: string): ReactNode[] {
-  const out: ReactNode[] = [];
+/** Renders text into `out`, handling **…**, ##…##, ^…^ and ~…~ recursively. */
+function renderFragment(text: string, out: ReactNode[], keyBase: { n: number }): void {
   let plain = "";
 
   const flush = () => {
     if (!plain) return;
     const parts = plain.split("\n");
     parts.forEach((seg, idx) => {
-      if (idx > 0) out.push(<br key={`br-${out.length}`} />);
-      if (seg) out.push(...wrapUnicodeRuns(seg, out.length));
+      if (idx > 0) out.push(<br key={`br-${keyBase.n++}`} />);
+      if (seg) out.push(...wrapUnicodeRuns(seg, keyBase));
     });
     plain = "";
   };
 
   for (let i = 0; i < text.length; ) {
+    if (text.startsWith("**", i) || text.startsWith("##", i)) {
+      const marker = text.slice(i, i + 2);
+      const end = text.indexOf(marker, i + 2);
+      if (end === -1 || text.slice(i + 2, end).includes("\n")) {
+        plain += marker[0];
+        i += 1;
+        continue;
+      }
+      flush();
+      const inner: ReactNode[] = [];
+      renderFragment(text.slice(i + 2, end), inner, keyBase);
+      out.push(
+        marker === "**" ? (
+          <strong key={`b-${keyBase.n++}`}>{inner}</strong>
+        ) : (
+          <span key={`r-${keyBase.n++}`} style={{ color: RED }}>
+            {inner}
+          </span>
+        )
+      );
+      i = end + 2;
+      continue;
+    }
     const ch = text[i]!;
     if (ch === "^" || ch === "~") {
       const end = text.indexOf(ch, i + 1);
@@ -64,9 +92,10 @@ function parseSegments(text: string): ReactNode[] {
         continue;
       }
       flush();
-      const content = text.slice(i + 1, end);
+      const inner: ReactNode[] = [];
+      renderFragment(text.slice(i + 1, end), inner, keyBase);
       const Tag = ch === "~" ? "sub" : "sup";
-      out.push(<Tag key={`m-${out.length}`}>{content}</Tag>);
+      out.push(<Tag key={`m-${keyBase.n++}`}>{inner}</Tag>);
       i = end + 1;
       continue;
     }
@@ -74,9 +103,10 @@ function parseSegments(text: string): ReactNode[] {
     i += 1;
   }
   flush();
-  return out;
 }
 
 export default function RichText({ text }: { text: string }) {
-  return <>{parseSegments(text ?? "")}</>;
+  const out: ReactNode[] = [];
+  renderFragment(text ?? "", out, { n: 0 });
+  return <>{out}</>;
 }
