@@ -80,6 +80,8 @@ import {
   sortSubjectsForView,
   subscribeAllMaterialQuizResults,
   deleteMaterialQuizResult,
+  subscribeAllMaterialQuizDone,
+  subscribeAllMaterialQuizzes,
   subscribeQuizzesBySubject,
   createQuiz,
   updateQuiz,
@@ -90,13 +92,29 @@ import {
   updateMaterialQuiz,
 } from "@/services/firestore";
 import { AVAILABLE_ICONS, COLORS } from "@/lib/constants";
-import type { Subject, Student, Ticker, Admin, StatsData, QuizResult, Quiz } from "@/types";
+import type { Subject, Student, Ticker, Admin, StatsData, QuizResult, Quiz, MaterialQuizDone } from "@/types";
 import QuizEditorDialog, { type QuizPayload } from "@/components/QuizEditorDialog";
 import {
   scoreColor,
   materialQuizSubjectRows,
   materialQuizBuckets,
 } from "@/lib/materialQuizStats";
+
+// Students' self-marked quiz completion, shown in the students table.
+function DoneProgressCell({ done, total }: { done: number; total: number }) {
+  if (total === 0) return <span className="text-xs text-muted-foreground">—</span>;
+  const all = done >= total;
+  return (
+    <span
+      className="flex items-center gap-1 text-xs font-medium whitespace-nowrap"
+      style={{ color: all ? "#22c55e" : done > 0 ? "#f59e0b" : undefined }}
+      title={`أنهى ${done} من ${total} اختبار تفاعلي`}
+    >
+      <CheckCircle2 className="h-3 w-3 shrink-0" />
+      {done}/{total}
+    </span>
+  );
+}
 
 export default function AdminPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
@@ -126,8 +144,33 @@ export default function AdminPage() {
   const [materialQuizResults, setMaterialQuizResults] = useState<QuizResult[]>([]);
   const [openQuizSubject, setOpenQuizSubject] = useState<string | null>(null);
   const [openMaterialQuizId, setOpenMaterialQuizId] = useState<string | null>(null);
+  // Students' own "finished" marks on interactive quizzes (علامة إنجاز)
+  const [doneMarks, setDoneMarks] = useState<MaterialQuizDone[]>([]);
+  const [allMaterialQuizzes, setAllMaterialQuizzes] = useState<Quiz[]>([]);
 
   useEffect(() => subscribeAllMaterialQuizResults(setMaterialQuizResults), []);
+  useEffect(
+    () =>
+      subscribeAllMaterialQuizDone(setDoneMarks, (err) =>
+        console.error("materialQuizDone snapshot error:", err)
+      ),
+    []
+  );
+  useEffect(
+    () => subscribeAllMaterialQuizzes(setAllMaterialQuizzes, (err) => console.error("materialQuizzes snapshot error:", err)),
+    []
+  );
+
+  // done / total visible interactive quizzes for a student (optionally per subject)
+  const quizDoneProgress = (username: string, subjectId?: string) => {
+    const total = allMaterialQuizzes.filter(
+      (q) => !q.isHidden && (!subjectId || q.subjectId === subjectId)
+    ).length;
+    const raw = doneMarks.filter(
+      (m) => m.done && m.username === username && (!subjectId || m.subjectId === subjectId)
+    ).length;
+    return { done: Math.min(raw, total), total };
+  };
 
   const handleDeleteMaterialResult = async (result: QuizResult) => {
     if (!confirm(`حذف نتيجة الطالب «${result.studentName || result.username}»؟`)) return;
@@ -1341,6 +1384,7 @@ export default function AdminPage() {
                                       <TableHead>اسم المستخدم</TableHead>
                                       <TableHead>الاسم</TableHead>
                                       <TableHead className="hidden sm:table-cell">الأجهزة</TableHead>
+                                      <TableHead className="hidden sm:table-cell">الإنجاز</TableHead>
                                       <TableHead>الحالة</TableHead>
                                       <TableHead>الإجراءات</TableHead>
                                     </TableRow>
@@ -1374,6 +1418,11 @@ export default function AdminPage() {
                                             )}
                                           </Button>
                                         </TableCell>
+                                        <TableCell className="hidden sm:table-cell">
+                                          <DoneProgressCell
+                                            {...quizDoneProgress(student.username, subject.id)}
+                                          />
+                                        </TableCell>
                                         <TableCell>
                                           {student.isActive ? (
                                             <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
@@ -1386,8 +1435,7 @@ export default function AdminPage() {
                                               موقوف
                                             </span>
                                           )}
-                                        </TableCell>
-                                        <TableCell>
+                                        </TableCell>                                        <TableCell>
                                           <div className="flex items-center gap-2">
                                             <Button
                                               size="sm"
@@ -1434,6 +1482,7 @@ export default function AdminPage() {
                                     <TableHead>اسم المستخدم</TableHead>
                                     <TableHead>الاسم</TableHead>
                                     <TableHead className="hidden sm:table-cell">الأجهزة</TableHead>
+                                    <TableHead className="hidden sm:table-cell">الإنجاز</TableHead>
                                     <TableHead>الحالة</TableHead>
                                     <TableHead>الإجراءات</TableHead>
                                   </TableRow>
@@ -1466,6 +1515,9 @@ export default function AdminPage() {
                                             </>
                                           )}
                                         </Button>
+                                      </TableCell>
+                                      <TableCell className="hidden sm:table-cell">
+                                        <DoneProgressCell {...quizDoneProgress(student.username)} />
                                       </TableCell>
                                       <TableCell>
                                         {student.isActive ? (

@@ -125,6 +125,16 @@ export interface StudentMedals {
   lastUpdatedAt: string;
 }
 
+/** Student's own "finished" mark on an interactive quiz (`materialQuizDone`). */
+export interface MaterialQuizDone {
+  id: string; // `${quizId}_${username}`
+  subjectId: string;
+  quizId: string;
+  username: string;
+  done: boolean;
+  updatedAt: string;
+}
+
 export interface UserProgress {
   userId: string;
   completedItems: string[];

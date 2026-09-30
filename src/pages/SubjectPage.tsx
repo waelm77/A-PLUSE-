@@ -87,6 +87,8 @@ import {
   toggleFileHidden,
   toggleAssessmentHidden,
   subscribeMaterialQuizzesBySubject,
+  subscribeMaterialQuizDone,
+  setMaterialQuizDone,
   createMaterialQuiz,
   updateMaterialQuiz,
   deleteMaterialQuiz,
@@ -342,6 +344,7 @@ export default function SubjectPage() {
   });
 
   const [materialQuizzes, setMaterialQuizzes] = useState<Quiz[]>([]);
+  const [doneMaterialQuizIds, setDoneMaterialQuizIds] = useState<string[]>([]);
   const [challengeQuizzes, setChallengeQuizzes] = useState<Quiz[]>([]);
   const [materialQuizOpen, setMaterialQuizOpen] = useState(false);
   const [editingMaterialQuiz, setEditingMaterialQuiz] = useState<Quiz | null>(null);
@@ -392,6 +395,17 @@ export default function SubjectPage() {
     const t = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(t);
   }, []);
+
+  // The student's own "finished" marks for interactive quizzes. Stored in
+  // Firestore (not localStorage) so they follow the account across devices and
+  // can be reported to the teacher in the admin panel.
+  useEffect(() => {
+    const username = studentSession?.username;
+    if (!id || !username) return;
+    return subscribeMaterialQuizDone(id, username, setDoneMaterialQuizIds, () =>
+      toast.error("حدث خطأ في تحميل علامات الإنجاز")
+    );
+  }, [id, studentSession?.username]);
 
   const openAccessDialog = () => {
     setAccessUsername("");
@@ -836,6 +850,29 @@ export default function SubjectPage() {
       toast.success("تم الحذف");
     } catch {
       toast.error("حدث خطأ أثناء الحذف");
+    }
+  };
+
+  const handleToggleMaterialQuizDone = async (quiz: Quiz) => {
+    const username = studentSession?.username;
+    if (!username) {
+      toast.error("يجب تسجيل دخول الطالب لتتبع الإنجاز");
+      return;
+    }
+    const next = !doneMaterialQuizIds.includes(quiz.id);
+    // Optimistic update; the live subscription re-syncs right after the write.
+    setDoneMaterialQuizIds((prev) =>
+      next ? [...prev, quiz.id] : prev.filter((x) => x !== quiz.id)
+    );
+    try {
+      await setMaterialQuizDone({ subjectId: quiz.subjectId, quizId: quiz.id, username, done: next });
+      toast.success(next ? "تم وضع علامة الإنجاز" : "تم إلغاء علامة الإنجاز");
+    } catch (e) {
+      console.error("toggle done mark error:", e);
+      setDoneMaterialQuizIds((prev) =>
+        next ? prev.filter((x) => x !== quiz.id) : [...prev, quiz.id]
+      );
+      toast.error("تعذر حفظ علامة الإنجاز");
     }
   };
 
@@ -1477,8 +1514,8 @@ export default function SubjectPage() {
                     onToggleFree={(qq) => handleToggleMaterialQuizFree(qq.id, qq.isFree ?? true)}
                     onToggleHide={(qq) => handleToggleMaterialQuizHidden(qq.id, qq.isHidden ?? false)}
                     onDelete={(qq) => handleDeleteMaterialQuiz(qq.id)}
-                    isCompleted={completedItems.includes(q.id)}
-                    onToggleComplete={() => handleToggleProgress(q.id)}
+                    isCompleted={doneMaterialQuizIds.includes(q.id)}
+                    onToggleComplete={() => handleToggleMaterialQuizDone(q)}
                   />
                 ))}
                 {showSharedChallenge && visibleSharedChallengeQuizzes.length > 0 && (
@@ -1504,8 +1541,8 @@ export default function SubjectPage() {
                         onToggleFree={(qq) => handleToggleChallengeQuizFree(qq.id, qq.isFree ?? true)}
                         onToggleHide={(qq) => handleToggleChallengeQuizHidden(qq.id, qq.isHidden ?? false)}
                         onDelete={(qq) => handleDeleteChallengeQuiz(qq.id)}
-                        isCompleted={completedItems.includes(q.id)}
-                        onToggleComplete={() => handleToggleProgress(q.id)}
+                        isCompleted={doneMaterialQuizIds.includes(q.id)}
+                        onToggleComplete={() => handleToggleMaterialQuizDone(q)}
                       />
                     ))}
                   </>

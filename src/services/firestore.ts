@@ -20,7 +20,7 @@ import {
 } from "firebase/firestore";
 import type { DocumentSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo, Ticker, Admin, DailyVisit, VideoStats, Quiz, QuizOption, QuizResult, StudentMedals, Medal } from "../types";
+import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo, Ticker, Admin, DailyVisit, VideoStats, Quiz, QuizOption, QuizResult, StudentMedals, Medal, MaterialQuizDone } from "../types";
 
 const useLocalStorage = false;
 
@@ -1710,6 +1710,20 @@ export function subscribeMaterialQuizzesBySubject(
   );
 }
 
+export function subscribeAllMaterialQuizzes(
+  onData: (items: Quiz[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  return onSnapshot(
+    collection(db, "materialQuizzes"),
+    (snapshot) =>
+      onData(
+        snapshot.docs.map(materialQuizFromDoc).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      ),
+    (err) => onError?.(err)
+  );
+}
+
 export function subscribeMaterialQuizResults(
   subjectId: string,
   onData: (items: QuizResult[]) => void,
@@ -1835,4 +1849,70 @@ export async function toggleMaterialQuizHidden(id: string, isHidden: boolean): P
 
 export async function deleteMaterialQuizResult(resultId: string): Promise<void> {
   await deleteDoc(doc(db, "materialQuizResults", resultId));
+}
+
+// ─── Student "done" marks for material quizzes (علامة إنجاز الطالب) ────
+// One doc per student + quiz (id `${quizId}_${username}`) so the mark follows
+// the account across devices and is visible to the teacher in the admin panel.
+
+export function materialQuizDoneFromDoc(d: DocumentSnapshot): MaterialQuizDone {
+  const data = d.data()!;
+  return {
+    id: d.id,
+    subjectId: String(data.subjectId || ""),
+    quizId: String(data.quizId || ""),
+    username: String(data.username || ""),
+    done: data.done !== false,
+    updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+  };
+}
+
+export async function setMaterialQuizDone(input: {
+  subjectId: string;
+  quizId: string;
+  username: string;
+  done: boolean;
+}): Promise<void> {
+  const ref = doc(db, "materialQuizDone", `${input.quizId}_${input.username}`);
+  await setDoc(
+    ref,
+    {
+      subjectId: input.subjectId,
+      quizId: input.quizId,
+      username: input.username,
+      done: input.done,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+export function subscribeMaterialQuizDone(
+  subjectId: string,
+  username: string,
+  onData: (quizIds: string[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  const q = query(
+    collection(db, "materialQuizDone"),
+    where("subjectId", "==", subjectId),
+    where("username", "==", username)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) =>
+      onData(snapshot.docs.map(materialQuizDoneFromDoc).filter((m) => m.done).map((m) => m.quizId)),
+    (err) => onError?.(err)
+  );
+}
+
+export function subscribeAllMaterialQuizDone(
+  onData: (items: MaterialQuizDone[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  return onSnapshot(
+    collection(db, "materialQuizDone"),
+    (snapshot) => onData(snapshot.docs.map(materialQuizDoneFromDoc)),
+    (err) => onError?.(err)
+  );
 }

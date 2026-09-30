@@ -92,6 +92,13 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
+    // Students' own "finished" marks on interactive quizzes. Students sign in
+    // in-app (no Firebase Auth), so reads/writes stay open at the same trust
+    // level as /materialQuizResults. Doc id is `${quizId}_${username}`.
+    match /materialQuizDone/{doc} {
+      allow read: if true;
+      allow write: if true;
+    }
 
     // ─── COUNTERS (atomic order counters per subject) ──────────
     // Read/write admin only.
