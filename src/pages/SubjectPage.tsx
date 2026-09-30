@@ -800,6 +800,8 @@ export default function SubjectPage() {
     const score = total === 0 ? 0 : Math.round((correct / total) * 100);
     const res = await submitMaterialQuizResult({
       subjectId: quiz.subjectId,
+      quizId: quiz.id,
+      quizTitle: quiz.title,
       username: studentSession.username,
       studentName: studentSession.displayName,
       score,

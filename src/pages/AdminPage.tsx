@@ -56,6 +56,7 @@ import {
   Pencil,
   Lock,
   Unlock,
+  AlertCircle,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useTrialStore } from "@/store/trialStore";
@@ -91,6 +92,11 @@ import {
 import { AVAILABLE_ICONS, COLORS } from "@/lib/constants";
 import type { Subject, Student, Ticker, Admin, StatsData, QuizResult, Quiz } from "@/types";
 import QuizEditorDialog, { type QuizPayload } from "@/components/QuizEditorDialog";
+import {
+  scoreColor,
+  materialQuizSubjectRows,
+  materialQuizBuckets,
+} from "@/lib/materialQuizStats";
 
 export default function AdminPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
@@ -119,6 +125,7 @@ export default function AdminPage() {
   // ─── Material quiz results (نتائج اختبار المواد) ──
   const [materialQuizResults, setMaterialQuizResults] = useState<QuizResult[]>([]);
   const [openQuizSubject, setOpenQuizSubject] = useState<string | null>(null);
+  const [openMaterialQuizId, setOpenMaterialQuizId] = useState<string | null>(null);
 
   useEffect(() => subscribeAllMaterialQuizResults(setMaterialQuizResults), []);
 
@@ -610,6 +617,16 @@ export default function AdminPage() {
     setStudentDialogOpen(true);
   };
 
+  // A username must stay unique: login looks up by username and takes the first
+  // match, so a duplicate silently blocks BOTH students from signing in. The
+  // live `students` snapshot feeds this check — real-time, no extra query.
+  const findDuplicateStudent = (username: string): Student | null => {
+    const u = username.trim().toLowerCase();
+    if (!u) return null;
+    return students.find((s) => s.username.trim().toLowerCase() === u) ?? null;
+  };
+  const duplicateStudent = findDuplicateStudent(studentForm.username);
+
   const openEditStudent = (student: Student) => {
     setEditingStudent(student);
     setStudentForm({
@@ -632,6 +649,10 @@ export default function AdminPage() {
     if (studentForm.enrolledSubjects.length === 0) missing.push("المادة");
     if (missing.length) {
       toast.error(`أحد البيانات فارغ: ${missing.join("، ")}`);
+      return;
+    }
+    if (!editingStudent && findDuplicateStudent(studentForm.username)) {
+      toast.error("اسم المستخدم مستخدم بالفعل — اختر اسمًا آخر");
       return;
     }
     setStudentSubmitting(true);
@@ -2172,55 +2193,42 @@ let status: { label: string; cls: string } = { label: "غير مفعّل", cls: 
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {Object.entries(
-                                materialQuizResults.reduce<Record<string, QuizResult[]>>((acc, r) => {
-                                  (acc[r.subjectId] ||= []).push(r);
-                                  return acc;
-                                }, {})
-                              )
-                                .map(([subjectId, items]) => ({
-                                  subjectId,
-                                  items: [...items].sort((a, b) => b.score - a.score),
-                                }))
-                                .map(({ subjectId, items }) => {
-                                  const subject = subjects.find((s) => s.id === subjectId);
-                                  const avg = Math.round(
-                                    items.reduce((s, r) => s + r.score, 0) / items.length
-                                  );
-                                  const expanded = openQuizSubject === subjectId;
-                                  return (
-                                    <TableRow
-                                      key={subjectId}
-                                      className="cursor-pointer hover:bg-muted/40"
-                                      onClick={() => setOpenQuizSubject(expanded ? null : subjectId)}
+                              {materialQuizSubjectRows(materialQuizResults).map(
+                              ({ subjectId, studentCount, avg, lastUpdated }) => {
+                                const subject = subjects.find((s) => s.id === subjectId);
+                                const expanded = openQuizSubject === subjectId;
+                                return (
+                                  <TableRow
+                                    key={subjectId}
+                                    className="cursor-pointer hover:bg-muted/40"
+                                    onClick={() => setOpenQuizSubject(expanded ? null : subjectId)}
+                                  >
+                                    <TableCell className="font-medium">
+                                      <span className="flex items-center gap-2">
+                                        <ChevronDown
+                                          className={`h-4 w-4 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+                                        />
+                                        <span
+                                          className="inline-block h-3 w-3 rounded-full shrink-0"
+                                          style={{ backgroundColor: subject?.color || "#888" }}
+                                        />
+                                        {subject?.name || subjectId}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell className="text-center">{studentCount}</TableCell>
+                                    <TableCell
+                                      className="text-center font-bold"
+                                      style={{ color: scoreColor(avg) }}
                                     >
-                                      <TableCell className="font-medium">
-                                        <span className="flex items-center gap-2">
-                                          <ChevronDown
-                                            className={`h-4 w-4 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
-                                          />
-                                          <span
-                                            className="inline-block h-3 w-3 rounded-full shrink-0"
-                                            style={{ backgroundColor: subject?.color || "#888" }}
-                                          />
-                                          {subject?.name || subjectId}
-                                        </span>
-                                      </TableCell>
-                                      <TableCell className="text-center">{items.length}</TableCell>
-                                      <TableCell
-                                        className="text-center font-bold"
-                                        style={{
-                                          color: avg >= 80 ? "#22c55e" : avg >= 60 ? "#f59e0b" : "#ef4444",
-                                        }}
-                                      >
-                                        {avg}%
-                                      </TableCell>
-                                      <TableCell className="text-center text-muted-foreground">
-                                        {new Date(items[0]!.updatedAt).toLocaleDateString("ar-EG")}
-                                      </TableCell>
-                                    </TableRow>
-                                  );
-                                })}
+                                      {avg}%
+                                    </TableCell>
+                                    <TableCell className="text-center text-muted-foreground">
+                                      {new Date(lastUpdated).toLocaleDateString("ar-EG")}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              }
+                            )}
                             </TableBody>
                           </Table>
                         </div>
@@ -2231,7 +2239,6 @@ let status: { label: string; cls: string } = { label: "غير مفعّل", cls: 
                             );
                             if (group.length === 0) return null;
                             const subject = subjects.find((s) => s.id === openQuizSubject);
-                            const sorted = [...group].sort((a, b) => b.score - a.score);
                             return (
                               <div className="border-t border-border/50 p-3">
                                 <p className="text-sm font-bold mb-2 flex items-center gap-2">
@@ -2239,57 +2246,94 @@ let status: { label: string; cls: string } = { label: "غير مفعّل", cls: 
                                     className="inline-block h-3 w-3 rounded-full"
                                     style={{ backgroundColor: subject?.color || "#888" }}
                                   />
-                                  طلاب {subject?.name || openQuizSubject}
+                                  اختبارات {subject?.name || openQuizSubject}
                                 </p>
-                                <div className="overflow-x-auto">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow className="hover:bg-transparent">
-                                        <TableHead>الطالب</TableHead>
-                                        <TableHead className="text-center">النتيجة</TableHead>
-                                        <TableHead className="text-center">المحاولات</TableHead>
-                                        <TableHead className="text-center">آخر تحديث</TableHead>
-                                        <TableHead className="text-center">إجراء</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {sorted.map((r) => (
-                                        <TableRow key={r.id} className="hover:bg-transparent">
-                                          <TableCell className="font-medium">
-                                            {r.studentName || r.username}
-                                          </TableCell>
-                                          <TableCell
-                                            className="text-center font-bold"
-                                            style={{
-                                              color:
-                                                r.score >= 80
-                                                  ? "#22c55e"
-                                                  : r.score >= 60
-                                                    ? "#f59e0b"
-                                                    : "#ef4444",
-                                            }}
-                                          >
-                                            {r.score}%
-                                          </TableCell>
-                                          <TableCell className="text-center">{r.attempts}</TableCell>
-                                          <TableCell className="text-center text-muted-foreground">
-                                            {new Date(r.updatedAt).toLocaleString("ar-EG")}
-                                          </TableCell>
-                                          <TableCell className="text-center">
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              className="p-2 h-auto text-red-400 hover:text-red-300"
-                                              title="حذف نتيجة الطالب"
-                                              onClick={() => handleDeleteMaterialResult(r)}
+                                <div className="space-y-2">
+                                  {materialQuizBuckets(group).map((bucket) => {
+                                    const quizExpanded = openMaterialQuizId === bucket.quizId;
+                                    return (
+                                      <div
+                                        key={bucket.quizId}
+                                        className="overflow-hidden rounded-lg border border-border/50"
+                                      >
+                                        <div
+                                          className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 hover:bg-muted/40"
+                                          onClick={() =>
+                                            setOpenMaterialQuizId(quizExpanded ? null : bucket.quizId)
+                                          }
+                                        >
+                                          <div className="flex items-center gap-2 font-semibold text-sm min-w-0">
+                                            <ChevronDown
+                                              className={`h-4 w-4 shrink-0 transition-transform ${quizExpanded ? "rotate-180" : ""}`}
+                                            />
+                                            <FileText className="h-4 w-4 shrink-0 text-green-400" />
+                                            <span
+                                              className={
+                                                bucket.quizId === "legacy"
+                                                  ? "text-muted-foreground"
+                                                  : ""
+                                              }
                                             >
-                                              <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                          </TableCell>
-                                        </TableRow>
-                                      ))}
-                                    </TableBody>
-                                  </Table>
+                                              {bucket.title}
+                                            </span>
+                                          </div>
+                                          <span className="text-xs text-muted-foreground shrink-0">
+                                            {bucket.students.length} طالب • المتوسط{" "}
+                                            <b style={{ color: scoreColor(bucket.avg) }}>
+                                              {bucket.avg}%
+                                            </b>
+                                          </span>
+                                        </div>
+                                        {quizExpanded && (
+                                          <div className="border-t border-border/50 overflow-x-auto">
+                                            <Table>
+                                              <TableHeader>
+                                                <TableRow className="hover:bg-transparent">
+                                                  <TableHead>الطالب</TableHead>
+                                                  <TableHead className="text-center">النتيجة</TableHead>
+                                                  <TableHead className="text-center">المحاولات</TableHead>
+                                                  <TableHead className="text-center">آخر تحديث</TableHead>
+                                                  <TableHead className="text-center">إجراء</TableHead>
+                                                </TableRow>
+                                              </TableHeader>
+                                              <TableBody>
+                                                {bucket.students.map((r) => (
+                                                  <TableRow key={r.id} className="hover:bg-transparent">
+                                                    <TableCell className="font-medium">
+                                                      {r.studentName || r.username}
+                                                    </TableCell>
+                                                    <TableCell
+                                                      className="text-center font-bold"
+                                                      style={{ color: scoreColor(r.score) }}
+                                                    >
+                                                      {r.score}%
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                      {r.attempts}
+                                                    </TableCell>
+                                                    <TableCell className="text-center text-muted-foreground">
+                                                      {new Date(r.updatedAt).toLocaleString("ar-EG")}
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                      <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="p-2 h-auto text-red-400 hover:text-red-300"
+                                                        title="حذف نتيجة الطالب"
+                                                        onClick={() => handleDeleteMaterialResult(r)}
+                                                      >
+                                                        <Trash2 className="h-4 w-4" />
+                                                      </Button>
+                                                    </TableCell>
+                                                  </TableRow>
+                                                ))}
+                                              </TableBody>
+                                            </Table>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             );
@@ -2321,7 +2365,19 @@ let status: { label: string; cls: string } = { label: "غير مفعّل", cls: 
                 onChange={(e) => setStudentForm({ ...studentForm, username: e.target.value })}
                 placeholder="مثال: ahmed_2026"
                 disabled={!!editingStudent}
+                aria-invalid={!!duplicateStudent}
               />
+              {duplicateStudent && (
+                <p className="mt-1 flex items-center gap-1 text-xs font-medium text-red-600">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  اسم المستخدم مستخدم بالفعل — اختر اسمًا آخر
+                  {duplicateStudent.displayName.trim() && (
+                    <span className="text-muted-foreground">
+                      (موجود لدى: {duplicateStudent.displayName})
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
             <div>
               <Label htmlFor="s-password">

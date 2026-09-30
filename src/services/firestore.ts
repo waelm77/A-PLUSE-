@@ -1737,13 +1737,17 @@ export function subscribeAllMaterialQuizResults(
 /** Unlimited attempts: keep best score, always records the newest attempt. */
 export async function submitMaterialQuizResult(input: {
   subjectId: string;
+  quizId: string;
+  quizTitle: string;
   username: string;
   studentName: string;
   score: number;
   correctCount: number;
   totalQuestions: number;
 }): Promise<{ result: QuizResult; attempt: number; saved: boolean }> {
-  const resultId = `${input.subjectId}_${input.username}`;
+  // One best-score document per student per QUIZ (not per subject), so the
+  // statistics can report how many students took each specific interactive quiz.
+  const resultId = `${input.quizId}_${input.username}`;
   const ref = doc(db, "materialQuizResults", resultId);
   const existingSnap = await getDoc(ref);
   const existing = existingSnap.exists() ? quizResultFromDoc(existingSnap) : null;
@@ -1757,6 +1761,8 @@ export async function submitMaterialQuizResult(input: {
     ref,
     {
       subjectId: input.subjectId,
+      quizId: input.quizId,
+      quizTitle: input.quizTitle,
       username: input.username,
       studentName: input.studentName,
       score: bestScore,
@@ -1775,6 +1781,8 @@ export async function submitMaterialQuizResult(input: {
     : {
         id: resultId,
         subjectId: input.subjectId,
+        quizId: input.quizId,
+        quizTitle: input.quizTitle,
         username: input.username,
         studentName: input.studentName,
         score: bestScore,

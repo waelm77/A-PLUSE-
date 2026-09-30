@@ -99,7 +99,7 @@ export interface Quiz {
 export type Medal = "gold" | "silver" | "bronze";
 
 export interface QuizResult {
-  id: string; // `${subjectId}_${username}`
+  id: string; // challenge: `${subjectId}_${username}` • material: `${quizId}_${username}`
   subjectId: string;
   username: string;
   studentName: string;
@@ -109,6 +109,8 @@ export interface QuizResult {
   attempts: number; // 1..2
   bestAttempt: number; // the attempt that produced the best score
   medal?: Medal;
+  quizId?: string; // material quizzes only — the specific interactive quiz
+  quizTitle?: string; // denormalized quiz title so stats survive quiz deletion
   updatedAt: string;
 }
 
