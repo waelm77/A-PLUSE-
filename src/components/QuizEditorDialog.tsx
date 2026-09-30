@@ -1,6 +1,6 @@
 import { useState, type ClipboardEvent } from "react";
 import { toast } from "react-hot-toast";
-import { Plus, Trash2, ImagePlus } from "lucide-react";
+import { Plus, Trash2, ImagePlus, Unlock, Lock, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,6 +42,8 @@ interface QuizFormState {
   title: string;
   description: string;
   questions: FormQuestion[];
+  isFree: boolean;
+  isHidden: boolean;
 }
 
 const uid = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
@@ -108,8 +110,10 @@ export default function QuizEditorDialog({
             options: q.options.map((o) => ({ id: o.id, text: o.text, image: o.image ?? undefined })),
             correctId: q.correctId,
           })),
+          isFree: quiz.isFree ?? true,
+          isHidden: quiz.isHidden ?? false,
         }
-      : { title: "", description: "", questions: [emptyQuestion()] }
+      : { title: "", description: "", questions: [emptyQuestion()], isFree: true, isHidden: false }
   );
   const [saving, setSaving] = useState(false);
 
@@ -273,8 +277,8 @@ export default function QuizEditorDialog({
           if (q.image) question.image = q.image;
           return question;
         }),
-        isFree: quiz?.isFree ?? true,
-        isHidden: quiz?.isHidden ?? false,
+        isFree: form.isFree,
+        isHidden: form.isHidden,
       };
       await onSave(payload, form.id);
       onSaved();
@@ -312,6 +316,56 @@ export default function QuizEditorDialog({
               placeholder="وصف قصير"
               className="mt-1"
             />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Label className="ml-1">الظهور للطلاب:</Label>
+            <Button
+              type="button"
+              size="sm"
+              variant={form.isFree ? "default" : "outline"}
+              className="gap-1"
+              onClick={() => setForm({ ...form, isFree: true })}
+            >
+              <Unlock className="h-4 w-4" />
+              مجاني
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={!form.isFree ? "default" : "outline"}
+              className="gap-1"
+              onClick={() => setForm({ ...form, isFree: false })}
+            >
+              <Lock className="h-4 w-4" />
+              للمشتركين فقط
+            </Button>
+            <span className="w-px h-6 bg-border mx-1" />
+            <Button
+              type="button"
+              size="sm"
+              variant={!form.isHidden ? "default" : "outline"}
+              className="gap-1"
+              onClick={() => setForm({ ...form, isHidden: false })}
+            >
+              <Eye className="h-4 w-4" />
+              ظاهر
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={form.isHidden ? "destructive" : "outline"}
+              className="gap-1"
+              onClick={() => setForm({ ...form, isHidden: true })}
+            >
+              <EyeOff className="h-4 w-4" />
+              مخفي
+            </Button>
+            {form.isHidden && (
+              <span className="text-xs text-muted-foreground">
+                لن يظهر هذا الاختبار للطلاب حتى تعيد إظهاره
+              </span>
+            )}
           </div>
 
           <div className="space-y-4">

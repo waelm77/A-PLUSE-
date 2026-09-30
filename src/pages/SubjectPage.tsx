@@ -1477,6 +1477,8 @@ export default function SubjectPage() {
                     onToggleFree={(qq) => handleToggleMaterialQuizFree(qq.id, qq.isFree ?? true)}
                     onToggleHide={(qq) => handleToggleMaterialQuizHidden(qq.id, qq.isHidden ?? false)}
                     onDelete={(qq) => handleDeleteMaterialQuiz(qq.id)}
+                    isCompleted={completedItems.includes(q.id)}
+                    onToggleComplete={() => handleToggleProgress(q.id)}
                   />
                 ))}
                 {showSharedChallenge && visibleSharedChallengeQuizzes.length > 0 && (
@@ -1502,6 +1504,8 @@ export default function SubjectPage() {
                         onToggleFree={(qq) => handleToggleChallengeQuizFree(qq.id, qq.isFree ?? true)}
                         onToggleHide={(qq) => handleToggleChallengeQuizHidden(qq.id, qq.isHidden ?? false)}
                         onDelete={(qq) => handleDeleteChallengeQuiz(qq.id)}
+                        isCompleted={completedItems.includes(q.id)}
+                        onToggleComplete={() => handleToggleProgress(q.id)}
                       />
                     ))}
                   </>
@@ -2421,6 +2425,8 @@ function MaterialQuizCard({
   onToggleFree,
   onToggleHide,
   onDelete,
+  isCompleted,
+  onToggleComplete,
   badge = "اختبار تفاعلي",
 }: {
   quiz: Quiz;
@@ -2433,6 +2439,8 @@ function MaterialQuizCard({
   onToggleFree: (q: Quiz) => void;
   onToggleHide: (q: Quiz) => void;
   onDelete: (q: Quiz) => void;
+  isCompleted: boolean;
+  onToggleComplete: () => void;
   badge?: string;
 }) {
   const canAccess = isAdmin || quiz.isFree || hasSubjectAccess;
@@ -2453,6 +2461,11 @@ function MaterialQuizCard({
               <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary font-bold">
                 {badge}
               </span>
+              {isCompleted && (
+                <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-[10px] text-green-600 dark:text-green-400 font-bold">
+                  تم الإنجاز
+                </span>
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
               {quiz.questions.length} سؤال • محاولات غير محدودة
@@ -2516,6 +2529,20 @@ function MaterialQuizCard({
               </Button>
             </>
           )}
+          <button
+            onClick={onToggleComplete}
+            title={isCompleted ? "إلغاء علامة الإنجاز" : "وضع علامة: أنهيت هذا الاختبار"}
+            aria-label={isCompleted ? "إلغاء علامة الإنجاز" : "وضع علامة إنجاز"}
+            aria-pressed={isCompleted}
+            className="transition-colors shrink-0"
+            style={{ color: isCompleted ? "#22c55e" : undefined }}
+          >
+            {isCompleted ? (
+              <CheckCircle2 className="h-6 w-6" />
+            ) : (
+              <Circle className="h-6 w-6 text-muted-foreground" />
+            )}
+          </button>
         </div>
       </CardContent>
     </Card>
