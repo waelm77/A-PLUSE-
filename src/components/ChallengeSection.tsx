@@ -236,12 +236,12 @@ export default function ChallengeSection({
                     style={{ borderColor: subject.color + "44" }}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="font-bold text-lg flex items-center gap-2">
-                        <Play className="h-4 w-4" style={{ color: subject.color }} />
-                        {q.title}
+                      <h3 className="font-bold text-lg flex items-center gap-2 min-w-0">
+                        <Play className="h-4 w-4 shrink-0" style={{ color: subject.color }} />
+                        <span className="truncate">{q.title}</span>
                       </h3>
                       {q.isFree && !isAdmin && (
-                        <span className="rounded bg-green-500/90 px-1.5 py-0.5 text-[10px] text-white font-bold">
+                        <span className="rounded bg-green-500/90 px-1.5 py-0.5 text-[10px] text-white font-bold shrink-0">
                           مجاني
                         </span>
                       )}
@@ -282,7 +282,7 @@ export default function ChallengeSection({
                       )}
                     </div>
                     {isAdmin && (
-                      <div className="mt-2 flex items-center gap-1">
+                      <div className="mt-2 flex flex-wrap items-center gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
