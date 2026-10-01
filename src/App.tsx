@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import Home from './pages/Home'
 import ErrorBoundary from './components/ErrorBoundary'
+import { ConfirmDialogProvider } from './components/ConfirmDialogProvider'
 import { Toaster } from 'react-hot-toast'
 
 const SubjectPage = lazy(() => import('./pages/SubjectPage'))
@@ -26,17 +27,19 @@ export default function App() {
   return (
     <>
       <Toaster position="top-center" />
-      <Suspense fallback={<PageLoader />}>
-        <ErrorBoundaryReset>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/subject/:id" element={<SubjectPage />} />
-            <Route path="/admin" element={<AdminPage />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </ErrorBoundaryReset>
-      </Suspense>
+      <ConfirmDialogProvider>
+        <Suspense fallback={<PageLoader />}>
+          <ErrorBoundaryReset>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/subject/:id" element={<SubjectPage />} />
+              <Route path="/admin" element={<AdminPage />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </ErrorBoundaryReset>
+        </Suspense>
+      </ConfirmDialogProvider>
     </>
   )
 }

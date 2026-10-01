@@ -19,6 +19,7 @@ import { Plus, MessageCircle, Send } from "lucide-react";
 import toast from "react-hot-toast";
 import { subscribeSubjects, createSubject, trackVisit, getDeviceId, getVisibleSubjects, reorderSubjects } from "@/services/firestore";
 import { AVAILABLE_ICONS, COLORS } from "@/lib/constants";
+import { errorMessage } from "@/lib/errors";
 import type { Subject } from "@/types";
 
 export default function Home() {
@@ -75,8 +76,8 @@ export default function Home() {
       );
       // Subscribe fires immediately with current data, so loading ends soon after.
       return () => unsub();
-    } catch {
-      toast.error("حدث خطأ في تحميل المواد");
+    } catch (err) {
+      toast.error(errorMessage(err, "حدث خطأ في تحميل المواد"));
       setLoading(false);
       return () => {};
     }
@@ -107,8 +108,8 @@ export default function Home() {
       setOpen(false);
       setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen" });
       await loadSubjects();
-    } catch {
-      toast.error("حدث خطأ أثناء الإضافة");
+    } catch (err) {
+      toast.error(errorMessage(err, "حدث خطأ أثناء الإضافة"));
     } finally {
       setSubmitting(false);
     }

@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/authStore";
+import { useConfirm } from "@/lib/confirm";
+import { errorMessage } from "@/lib/errors";
 import ChallengeLeaderboard from "@/components/ChallengeLeaderboard";
 import QuizEditorDialog from "@/components/QuizEditorDialog";
 import QuizRunner, { type QuizOutcome } from "@/components/QuizRunner";
@@ -80,6 +82,7 @@ export default function ChallengeSection({
   onOpenAccess: () => void;
 }) {
   const studentSession = useAuthStore((s) => s.studentSession);
+  const confirm = useConfirm();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [results, setResults] = useState<QuizResult[]>([]);
   const [medalCounts, setMedalCounts] = useState<Record<string, number>>({});
@@ -323,9 +326,14 @@ export default function ChallengeSection({
                           size="sm"
                           className="gap-1 text-xs text-red-500"
                           onClick={async () => {
-                            if (!confirm("حذف هذا الاختبار؟")) return;
-                            await deleteQuiz(q.id);
-                            toast.success("تم الحذف");
+                            if (!(await confirm({ title: "حذف هذا الاختبار؟", variant: "destructive" }))) return;
+                            try {
+                              await deleteQuiz(q.id);
+                              toast.success("تم الحذف");
+                            } catch (err) {
+                              console.error("Challenge quiz delete error:", err);
+                              toast.error(errorMessage(err, "تعذّر حذف الاختبار"));
+                            }
                           }}
                         >
                           <Trash2 className="h-3.5 w-3.5" /> حذف

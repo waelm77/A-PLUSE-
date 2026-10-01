@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { compressImage, dataUrlBytes } from "@/lib/image";
+import { errorMessage } from "@/lib/errors";
 import {
   getClipboardImageFile,
   prefersClipboardImage,
@@ -73,8 +74,8 @@ function pickImage(onPicked: (file: File) => void) {
 async function readImage(file: File, maxW: number): Promise<string> {
   try {
     return await compressImage(file, { maxW, quality: 0.72 });
-  } catch {
-    toast.error("تعذر قراءة الصورة");
+  } catch (err) {
+    toast.error(errorMessage(err, "تعذر قراءة الصورة"));
     throw new Error("image-read-failed");
   }
 }

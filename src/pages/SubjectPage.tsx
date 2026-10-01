@@ -4,6 +4,8 @@ import Navbar from "@/components/Navbar";
 import TickerBar from "@/components/TickerBar";
 import { SubjectCountdown } from "@/components/TrialCountdown";
 import ChallengeSection from "@/components/ChallengeSection";
+import { useConfirm } from "@/lib/confirm";
+import { errorMessage } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -271,6 +273,7 @@ import QuizRunner, { type QuizOutcome } from "@/components/QuizRunner";
 export default function SubjectPage() {
   const { id } = useParams<{ id: string }>();
   const { user, studentSession } = useAuthStore();
+  const confirm = useConfirm();
   const isAdmin = user?.role === "admin";
 
   const [subject, setSubject] = useState<Subject | null>(null);
@@ -308,8 +311,8 @@ export default function SubjectPage() {
     try {
       const dataUrl = await compressImage(file);
       setVideoForm((f) => ({ ...f, thumbnail: dataUrl }));
-    } catch {
-      toast.error("فشل معالجة الصورة، جرّب صورة أخرى");
+    } catch (err) {
+      toast.error(errorMessage(err, "فشل معالجة الصورة، جرّب صورة أخرى"));
     } finally {
       setThumbBusy(false);
     }
@@ -637,15 +640,15 @@ export default function SubjectPage() {
       toast.success("تم إضافة الاختبار بنجاح");
       setAssessmentOpen(false);
       setAssessmentForm({ title: "", url: "", isFree: true });
-    } catch {
-      toast.error("حدث خطأ أثناء إضافة الاختبار");
+    } catch (err) {
+      toast.error(errorMessage(err, "حدث خطأ أثناء إضافة الاختبار"));
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDeleteItem = async (type: "video" | "file" | "assessment", itemId: string) => {
-    if (!confirm("هل أنت متأكد من الحذف؟")) return;
+    if (!(await confirm({ title: "هل أنت متأكد من الحذف؟", variant: "destructive" }))) return;
     try {
       if (type === "video") await deleteVideo(itemId);
       if (type === "file") await deleteFile(itemId);
@@ -728,8 +731,8 @@ export default function SubjectPage() {
     try {
       await toggleVideoFreeStatus(videoId, !currentIsFree);
       toast.success(!currentIsFree ? "تم جعل الفيديو مجاني" : "تم جعل الفيديو للمشتركين فقط");
-    } catch {
-      toast.error("حدث خطأ أثناء تغيير الحالة");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر تغيير حالة اشتراك الفيديو"));
     }
   };
 
@@ -737,8 +740,8 @@ export default function SubjectPage() {
     try {
       await toggleFileFreeStatus(fileId, !currentIsFree);
       toast.success(!currentIsFree ? "تم جعل الملف مجاني" : "تم جعل الملف للمشتركين فقط");
-    } catch {
-      toast.error("حدث خطأ أثناء تغيير الحالة");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر تغيير حالة اشتراك الملف"));
     }
   };
 
@@ -746,8 +749,8 @@ export default function SubjectPage() {
     try {
       await toggleFileDownloadStatus(fileId, !current);
       toast.success(!current ? "تم تفعيل التحميل" : "تم تعطيل التحميل");
-    } catch {
-      toast.error("حدث خطأ أثناء تغيير الحالة");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر تغيير إذن تنزيل الملف"));
     }
   };
 
@@ -755,8 +758,8 @@ export default function SubjectPage() {
     try {
       await toggleFileViewStatus(fileId, !current);
       toast.success(!current ? "تم تفعيل المشاهدة" : "تم تعطيل المشاهدة");
-    } catch {
-      toast.error("حدث خطأ أثناء تغيير الحالة");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر تغيير إذن مشاهدة الملف"));
     }
   };
 
@@ -764,8 +767,8 @@ export default function SubjectPage() {
     try {
       await toggleAssessmentFreeStatus(assessmentId, !currentIsFree);
       toast.success(!currentIsFree ? "تم جعل الاختبار مجاني" : "تم جعل الاختبار للمشتركين فقط");
-    } catch {
-      toast.error("حدث خطأ أثناء تغيير الحالة");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر تغيير حالة اشتراك الاختبار"));
     }
   };
 
@@ -773,8 +776,8 @@ export default function SubjectPage() {
     try {
       await toggleVideoHidden(videoId, !current);
       toast.success(!current ? "تم إخفاء الفيديو عن الطلاب" : "تم إظهار الفيديو للطلاب");
-    } catch {
-      toast.error("حدث خطأ أثناء تغيير الحالة");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر تغيير حالة إخفاء الفيديو"));
     }
   };
 
@@ -782,8 +785,8 @@ export default function SubjectPage() {
     try {
       await toggleFileHidden(fileId, !current);
       toast.success(!current ? "تم إخفاء الملف عن الطلاب" : "تم إظهار الملف للطلاب");
-    } catch {
-      toast.error("حدث خطأ أثناء تغيير الحالة");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر تغيير حالة إخفاء الملف"));
     }
   };
 
@@ -791,8 +794,8 @@ export default function SubjectPage() {
     try {
       await toggleAssessmentHidden(assessmentId, !current);
       toast.success(!current ? "تم إخفاء الاختبار عن الطلاب" : "تم إظهار الاختبار للطلاب");
-    } catch {
-      toast.error("حدث خطأ أثناء تغيير الحالة");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر تغيير حالة إخفاء الاختبار"));
     }
   };
 
@@ -848,8 +851,8 @@ export default function SubjectPage() {
     try {
       await toggleMaterialQuizFree(quizId, !current);
       toast.success(!current ? "تم جعل الاختبار مجاني" : "تم جعل الاختبار للمشتركين فقط");
-    } catch {
-      toast.error("حدث خطأ أثناء تغيير الحالة");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر تغيير حالة اشتراك اختبار المادة"));
     }
   };
 
@@ -857,18 +860,18 @@ export default function SubjectPage() {
     try {
       await toggleMaterialQuizHidden(quizId, !current);
       toast.success(!current ? "تم إخفاء الاختبار عن الطلاب" : "تم إظهار الاختبار للطلاب");
-    } catch {
-      toast.error("حدث خطأ أثناء تغيير الحالة");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر تغيير حالة إخفاء اختبار المادة"));
     }
   };
 
   const handleDeleteMaterialQuiz = async (quizId: string) => {
-    if (!confirm("حذف هذا الاختبار وتاريخ نتائجه؟")) return;
+    if (!(await confirm({ title: "حذف هذا الاختبار وتاريخ نتائجه؟", variant: "destructive" }))) return;
     try {
       await deleteMaterialQuiz(quizId);
       toast.success("تم الحذف");
-    } catch {
-      toast.error("حدث خطأ أثناء الحذف");
+    } catch (err) {
+      toast.error(errorMessage(err, "حدث خطأ أثناء الحذف"));
     }
   };
 
@@ -899,8 +902,8 @@ export default function SubjectPage() {
     try {
       await toggleQuizFree(quizId, !current);
       toast.success(!current ? "تم جعل الاختبار مجاني" : "تم جعل الاختبار للمشتركين فقط");
-    } catch {
-      toast.error("حدث خطأ أثناء تغيير الحالة");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر تغيير حالة اشتراك اختبار التحدي"));
     }
   };
 
@@ -908,18 +911,18 @@ export default function SubjectPage() {
     try {
       await toggleQuizHidden(quizId, !current);
       toast.success(!current ? "تم إخفاء الاختبار" : "تم إظهار الاختبار");
-    } catch {
-      toast.error("حدث خطأ أثناء تغيير الحالة");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر تغيير حالة إخفاء اختبار التحدي"));
     }
   };
 
   const handleDeleteChallengeQuiz = async (quizId: string) => {
-    if (!confirm("حذف هذا الاختبار ونتائجه؟")) return;
+    if (!(await confirm({ title: "حذف هذا الاختبار ونتائجه؟", variant: "destructive" }))) return;
     try {
       await deleteQuiz(quizId);
       toast.success("تم الحذف");
-    } catch {
-      toast.error("حدث خطأ أثناء الحذف");
+    } catch (err) {
+      toast.error(errorMessage(err, "حدث خطأ أثناء الحذف"));
     }
   };
 

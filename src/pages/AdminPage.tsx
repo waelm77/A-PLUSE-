@@ -60,6 +60,8 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useTrialStore } from "@/store/trialStore";
+import { errorMessage } from "@/lib/errors";
+import { useConfirm } from "@/lib/confirm";
 import toast from "react-hot-toast";
 import {
   createSubject,
@@ -148,6 +150,7 @@ export default function AdminPage() {
 
   // ─── Material quiz results (نتائج اختبار المواد) ──
   const [tab, setTab] = useState("subjects");
+  const confirm = useConfirm();
   const [materialQuizResults, setMaterialQuizResults] = useState<QuizResult[]>([]);
   const [openQuizSubject, setOpenQuizSubject] = useState<string | null>(null);
   const [openMaterialQuizId, setOpenMaterialQuizId] = useState<string | null>(null);
@@ -217,12 +220,17 @@ export default function AdminPage() {
   };
 
   const handleDeleteMaterialResult = async (result: QuizResult) => {
-    if (!confirm(`حذف نتيجة الطالب «${result.studentName || result.username}»؟`)) return;
+    if (!(await confirm({
+      title: "حذف نتيجة الطالب؟",
+      description: `سيتم حذف نتيجة «${result.studentName || result.username}» نهائياً.`,
+      confirmLabel: "حذف النتيجة",
+      variant: "destructive",
+    }))) return;
     try {
       await deleteMaterialQuizResult(result.id);
       toast.success("تم حذف النتيجة");
-    } catch {
-      toast.error("حدث خطأ أثناء الحذف");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر حذف النتيجة"));
     }
   };
 
@@ -273,8 +281,8 @@ export default function AdminPage() {
     try {
       await updateSubject(subject.id, { challengeActive: next });
       toast.success(next ? "تم تفعيل التحدي في صفحة المادة" : "تم إيقاف التحدي في المادة");
-    } catch {
-      toast.error("حدث خطأ أثناء تغيير الحالة");
+    } catch (err) {
+      toast.error(errorMessage(err, "حدث خطأ أثناء تغيير الحالة"));
     }
   };
 
@@ -283,8 +291,8 @@ export default function AdminPage() {
     try {
       await updateSubject(subject.id, { shareChallengePractice: next });
       toast.success(next ? "ستُعرض اختبارات التحدي في «اختبارات تدريبية» بعد انتهائه" : "تم إيقاف مشاركة اختبارات التحدي كتدريب");
-    } catch {
-      toast.error("حدث خطأ أثناء تغيير الحالة");
+    } catch (err) {
+      toast.error(errorMessage(err, "حدث خطأ أثناء تغيير الحالة"));
     }
   };
 
@@ -299,8 +307,8 @@ export default function AdminPage() {
         challengeEndDate: arenaEnd,
       });
       toast.success("تم حفظ إعدادات ساحة التحدي");
-    } catch {
-      toast.error("حدث خطأ أثناء الحفظ");
+    } catch (err) {
+      toast.error(errorMessage(err, "حدث خطأ أثناء الحفظ"));
     } finally {
       setArenaSaving(false);
     }
@@ -333,8 +341,8 @@ export default function AdminPage() {
           toast.success("تمت إضافة اختبار التحدي (يظهر فقط في ساحة التحدي بعد تفعيلها)");
         }
       }
-    } catch {
-      toast.error("حدث خطأ أثناء الحفظ");
+    } catch (err) {
+      toast.error(errorMessage(err, "حدث خطأ أثناء الحفظ"));
     }
   };
 
@@ -350,7 +358,12 @@ export default function AdminPage() {
   };
 
   const handleResetStats = async () => {
-    if (!confirm("هل أنت متأكد من مسح كل الإحصائيات؟\nسيبدأ العد من الصفر ولن يمكن التراجع.")) return;
+    if (!(await confirm({
+      title: "مسح كل الإحصائيات؟",
+      description: "سيبدأ العد من الصفر ولن يمكن التراجع عن هذه العملية.",
+      confirmLabel: "نعم، امسح الكل",
+      variant: "destructive",
+    }))) return;
     setResetting(true);
     try {
       await resetStats();
@@ -478,8 +491,8 @@ export default function AdminPage() {
     try {
       await saveTrial(trialFormDate, trialFormActive);
       toast.success("تم حفظ إعدادات الفترة التجريبية");
-    } catch {
-      toast.error("حدث خطأ أثناء الحفظ");
+    } catch (err) {
+      toast.error(errorMessage(err, "حدث خطأ أثناء الحفظ"));
     } finally {
       setTrialSaving(false);
     }
@@ -494,8 +507,8 @@ export default function AdminPage() {
     try {
       const data = await getAdmins();
       setAdmins(data);
-    } catch {
-      toast.error("حدث خطأ في تحميل المشرفين");
+    } catch (err) {
+      toast.error(errorMessage(err, "حدث خطأ في تحميل المشرفين"));
     } finally {
       setAdminsLoading(false);
     }
@@ -617,31 +630,40 @@ export default function AdminPage() {
       setOpen(false);
       setEditingSubject(null);
       setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px", countdownActive: false, countdownTitle: "الفترة التجريبية تنتهي خلال", countdownEndDate: "" });
-    } catch {
-      toast.error(editingSubject ? "حدث خطأ أثناء التعديل" : "حدث خطأ أثناء الإضافة");
+    } catch (err) {
+      toast.error(errorMessage(err, editingSubject ? "تعذّر حفظ التعديلات" : "تعذّر إضافة المادة"));
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("هل أنت متأكد من حذف هذه المادة؟")) return;
+    if (!(await confirm({
+      title: "حذف هذه المادة؟",
+      description: "سيتم حذف المادة وكل فيديوهاتها وملفاتها واختباراتها.",
+      confirmLabel: "حذف المادة",
+      variant: "destructive",
+    }))) return;
     try {
       await deleteSubject(id);
       toast.success("تم حذف المادة بنجاح");
-    } catch {
-      toast.error("حدث خطأ أثناء الحذف");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر حذف المادة"));
     }
   };
 
   const handleToggleSubjectHidden = async (subject: Subject) => {
     const target = !subject.isHidden;
-    if (target && !confirm("سيتم إخفاء هذه المادة عن الطلاب ونقلها إلى أسفل القائمة. متابعة؟")) return;
+    if (target && !(await confirm({
+      title: "إخفاء المادة؟",
+      description: "سيتم إخفاء هذه المادة عن الطلاب ونقلها إلى أسفل القائمة.",
+      confirmLabel: "إخفاء",
+    }))) return;
     try {
       await toggleSubjectHidden(subject.id, target);
       toast.success(target ? "تم إخفاء المادة عن الطلاب" : "تم إظهار المادة للطلاب");
-    } catch {
-      toast.error("حدث خطأ أثناء تغيير الحالة");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر تغيير حالة المادة"));
     }
   };
 
@@ -788,12 +810,17 @@ export default function AdminPage() {
   };
 
   const handleDeleteStudent = async (id: string) => {
-    if (!confirm("هل أنت متأكد من حذف هذا الطالب؟")) return;
+    if (!(await confirm({
+      title: "حذف هذا الطالب؟",
+      description: "سيتم حذف حساب الطالب ونتائجه وإنجازاته.",
+      confirmLabel: "حذف الطالب",
+      variant: "destructive",
+    }))) return;
     try {
       await deleteStudent(id);
       toast.success("تم حذف الطالب بنجاح");
     } catch (err) {
-      toast.error(err instanceof Error && err.message ? err.message : "حدث خطأ أثناء الحذف");
+      toast.error(errorMessage(err, "تعذّر حذف الطالب"));
     }
   };
 
@@ -805,12 +832,17 @@ export default function AdminPage() {
   );
 
   const handleRemoveDevice = async (studentId: string, deviceId: string) => {
-    if (!confirm("هل أنت متأكد من حذف هذا الجهاز؟ سيمكن الطالب من تسجيل جهاز جديد.")) return;
+    if (!(await confirm({
+      title: "حذف هذا الجهاز؟",
+      description: "سيمكن الطالب من تسجيل جهاز جديد.",
+      confirmLabel: "حذف الجهاز",
+      variant: "destructive",
+    }))) return;
     try {
       await removeDevice(studentId, deviceId);
       toast.success("تم حذف الجهاز بنجاح");
-    } catch {
-      toast.error("حدث خطأ أثناء حذف الجهاز");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر حذف الجهاز"));
     }
   };
 
@@ -875,13 +907,18 @@ export default function AdminPage() {
   };
 
   const handleDeleteAdmin = async (id: string) => {
-    if (!confirm("هل أنت متأكد من حذف هذا المشرف؟")) return;
+    if (!(await confirm({
+      title: "حذف هذا المشرف؟",
+      description: "سيفقد هذا الحساب صلاحية الوصول إلى لوحة الإدارة.",
+      confirmLabel: "حذف المشرف",
+      variant: "destructive",
+    }))) return;
     try {
       await deleteDoc(doc(db, "admins", id));
       toast.success("تم حذف المشرف بنجاح");
       await loadAdmins();
-    } catch {
-      toast.error("حدث خطأ أثناء الحذف");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر حذف المشرف"));
     }
   };
 
@@ -906,8 +943,8 @@ export default function AdminPage() {
       await sendPasswordResetEmail(auth, adminEmail);
       toast.success("تم إرسال رابط تغيير كلمة السر إلى البريد");
       setPasswordDialogOpen(false);
-    } catch {
-      toast.error("حدث خطأ أثناء إرسال رابط تغيير كلمة السر");
+    } catch (err) {
+      toast.error(errorMessage(err, "حدث خطأ أثناء إرسال رابط تغيير كلمة السر"));
     }
   };
 
@@ -2127,9 +2164,13 @@ export default function AdminPage() {
                                         className="p-2 h-auto"
                                         title="حذف"
                                         onClick={async () => {
-                                          if (!confirm("حذف هذا الاختبار؟")) return;
-                                          await deleteQuiz(q.id);
-                                          toast.success("تم الحذف");
+                                          if (!(await confirm({ title: "حذف هذا الاختبار؟", variant: "destructive" }))) return;
+                                          try {
+                                            await deleteQuiz(q.id);
+                                            toast.success("تم الحذف");
+                                          } catch (err) {
+                                            toast.error(errorMessage(err, "تعذّر حذف الاختبار"));
+                                          }
                                         }}
                                       >
                                         <Trash2 className="h-4 w-4" />
