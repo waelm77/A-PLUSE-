@@ -1,1 +1,15 @@
-﻿{"projects":{"default":"wael-educatinal-website"}}
+{
+  "projects": {
+    "default": "wael-educatinal-website"
+  },
+  "targets": {
+    "wael-educatinal-website": {
+      "hosting": {
+        "app": [
+          "wael-educatinal-website"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
