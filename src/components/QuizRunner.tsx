@@ -277,6 +277,8 @@ export default function QuizRunner({
                         <img
                           src={q.image}
                           alt="صورة السؤال"
+                          loading="lazy"
+                          decoding="async"
                           className="mt-2 max-h-36 w-auto max-w-full rounded-lg border object-contain"
                         />
                       )}

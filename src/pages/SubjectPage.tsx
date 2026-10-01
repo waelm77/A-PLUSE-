@@ -261,6 +261,7 @@ import QuizRunner, { type QuizOutcome } from "@/components/QuizRunner";
         src={src}
         alt={video.title}
         loading="lazy"
+        decoding="async"
         className="h-full w-full object-cover"
         onError={() => setBroken(true)}
       />
@@ -278,7 +279,6 @@ export default function SubjectPage() {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [completedItems, setCompletedItems] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [hasSubjectAccess, setHasSubjectAccess] = useState(false);
   const [accessDialogOpen, setAccessDialogOpen] = useState(false);
   const [accessUsername, setAccessUsername] = useState("");
   const [accessPassword, setAccessPassword] = useState("");
@@ -351,10 +351,12 @@ export default function SubjectPage() {
   const [activeMaterialQuiz, setActiveMaterialQuiz] = useState<Quiz | null>(null);
   const [quizAddChoiceOpen, setQuizAddChoiceOpen] = useState(false);
 
-  const loadData = async () => {
-    if (!id) return () => {};
-    setLoading(true);
-    // Video/file/assessment lists load live (instant first paint + auto-update).
+  // Video/file/assessment/quiz lists are live: Firestore pushes a new snapshot
+  // after every admin write, so these subscriptions are opened once per subject.
+  // The mutating handlers below must NOT re-open them (that used to stack a fresh
+  // set of listeners on each save and leak all but the first).
+  useEffect(() => {
+    if (!id) return;
     const unsubs = [
       subscribeVideosBySubject(id, setVideos, () => toast.error("حدث خطأ في تحميل الفيديوهات")),
       subscribeFilesBySubject(id, setFilesList, () => toast.error("حدث خطأ في تحميل الملفات")),
@@ -362,39 +364,70 @@ export default function SubjectPage() {
       subscribeMaterialQuizzesBySubject(id, setMaterialQuizzes, () => toast.error("حدث خطأ في تحميل الاختبارات التفاعلية")),
       subscribeQuizzesBySubject(id, setChallengeQuizzes, () => toast.error("حدث خطأ في تحميل اختبارات التحدي")),
     ];
-    try {
-      const sub = await getSubjectById(id);
-      setSubject(sub);
-      if (user && sub) {
-        setCompletedItems(getLocalProgress(user.uid));
-      }
-      if (studentSession && id && studentSession.enrolledSubjects.includes(id)) {
-        setHasSubjectAccess(true);
-      }
-    } catch (e) {
-      console.error("loadData error:", e);
-      toast.error("حدث خطأ في تحميل البيانات");
-    } finally {
-      setLoading(false);
-    }
-    return () => unsubs.forEach((u) => u());
-  };
-
-  useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
-    const cleanupPromise = loadData();
     trackVisit(getDeviceId());
-    /* eslint-enable react-hooks/set-state-in-effect */
     return () => {
-      cleanupPromise?.then((cleanup) => cleanup?.());
+      unsubs.forEach((u) => u());
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // The subject document is a single read, so it needs no live listener.
+  // SubjectPage is remounted per pathname (App keys the error boundary on the
+  // location), so this runs once per subject visit and `loading` starts true.
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30000);
-    return () => clearInterval(t);
-  }, []);
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const sub = await getSubjectById(id);
+        if (cancelled) return;
+        setSubject(sub);
+      } catch (e) {
+        console.error("Subject load error:", e);
+        toast.error("حدث خطأ في تحميل البيانات");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  // Signed-in progress and subject access both live in the auth store, which can
+  // resolve after this page mounts — keep them in sync independently of the
+  // subject read above.
+  useEffect(() => {
+    const uid = user?.uid;
+    /* eslint-disable-next-line react-hooks/set-state-in-effect */
+    if (uid) setCompletedItems(getLocalProgress(uid));
+  }, [user?.uid]);
+
+  // Access is derived from the store rather than mirrored into state: signing in
+  // sets the session and signing out clears it, so there is nothing to keep in sync.
+  const hasSubjectAccess = useMemo(
+    () => !!studentSession && !!id && studentSession.enrolledSubjects.includes(id),
+    [studentSession, id]
+  );
+
+  // `now` only ever decides whether the shared challenge window is open. The old
+  // 30s interval re-rendered the entire page — every video card, file, assessment
+  // and quiz — twice a minute for a boolean that rarely changes. Now we sleep until
+  // the next real boundary (challenge start / end) instead of polling.
+  const challengeFrom = subject?.challengeStartDate ? new Date(subject.challengeStartDate).getTime() : null;
+  const challengeTo = subject?.challengeEndDate ? new Date(subject.challengeEndDate).getTime() : null;
+
+  useEffect(() => {
+    if (!subject?.challengeActive) return;
+    const current = Date.now();
+    const pending = [challengeFrom, challengeTo]
+      .filter((value): value is number => value !== null && value > current)
+      .sort((a, b) => a - b);
+    if (pending.length === 0) return;
+    // Cap at an hour so a suspended tab can't leave the flag stale indefinitely.
+    const delay = Math.min(pending[0] - current + 250, 60 * 60 * 1000);
+    const timer = setTimeout(() => setNow(Date.now()), delay);
+    return () => clearTimeout(timer);
+  }, [subject?.challengeActive, challengeFrom, challengeTo, now]);
 
   // The student's own "finished" marks for interactive quizzes. Stored in
   // Firestore (not localStorage) so they follow the account across devices and
@@ -454,7 +487,6 @@ export default function SubjectPage() {
       });
 
       toast.success(`مرحباً ${result.student.displayName}!`);
-      setHasSubjectAccess(true);
       setAccessDialogOpen(false);
     } catch (e) {
       console.error("Login error:", e);
@@ -466,7 +498,6 @@ export default function SubjectPage() {
 
   const handleLogout = () => {
     useAuthStore.getState().setStudentSession(null);
-    setHasSubjectAccess(false);
     toast.success("تم تسجيل الخروج");
   };
 
@@ -558,7 +589,6 @@ export default function SubjectPage() {
       setVideoOpen(false);
       setEditingVideo(null);
       setVideoForm({ title: "", type: "theory", sourceType: "youtube", url: "", thumbnail: "", duration: "", isFree: true, color: "#3B82F6" });
-      await loadData();
     } catch (e) {
       console.error("Video submit error:", e);
       toast.error(editingVideo ? "حدث خطأ أثناء التعديل" : "حدث خطأ أثناء الإضافة");
@@ -585,7 +615,6 @@ export default function SubjectPage() {
       toast.success("تم إضافة الملف بنجاح");
       setFileOpen(false);
       setFileForm({ title: "", fileType: "pdf", size: "", downloadUrl: "", isFree: true, canDownload: true, canView: true });
-      await loadData();
     } catch (e) {
       console.error("Add file error:", e);
       toast.error("حدث خطأ أثناء إضافة الملف");
@@ -608,7 +637,6 @@ export default function SubjectPage() {
       toast.success("تم إضافة الاختبار بنجاح");
       setAssessmentOpen(false);
       setAssessmentForm({ title: "", url: "", isFree: true });
-      await loadData();
     } catch {
       toast.error("حدث خطأ أثناء إضافة الاختبار");
     } finally {
@@ -623,7 +651,6 @@ export default function SubjectPage() {
       if (type === "file") await deleteFile(itemId);
       if (type === "assessment") await deleteAssessment(itemId);
       toast.success("تم الحذف بنجاح");
-      await loadData();
     } catch (err) {
       toast.error(err instanceof Error && err.message ? err.message : "حدث خطأ أثناء الحذف");
     }
@@ -701,7 +728,6 @@ export default function SubjectPage() {
     try {
       await toggleVideoFreeStatus(videoId, !currentIsFree);
       toast.success(!currentIsFree ? "تم جعل الفيديو مجاني" : "تم جعل الفيديو للمشتركين فقط");
-      await loadData();
     } catch {
       toast.error("حدث خطأ أثناء تغيير الحالة");
     }
@@ -711,7 +737,6 @@ export default function SubjectPage() {
     try {
       await toggleFileFreeStatus(fileId, !currentIsFree);
       toast.success(!currentIsFree ? "تم جعل الملف مجاني" : "تم جعل الملف للمشتركين فقط");
-      await loadData();
     } catch {
       toast.error("حدث خطأ أثناء تغيير الحالة");
     }
@@ -721,7 +746,6 @@ export default function SubjectPage() {
     try {
       await toggleFileDownloadStatus(fileId, !current);
       toast.success(!current ? "تم تفعيل التحميل" : "تم تعطيل التحميل");
-      await loadData();
     } catch {
       toast.error("حدث خطأ أثناء تغيير الحالة");
     }
@@ -731,7 +755,6 @@ export default function SubjectPage() {
     try {
       await toggleFileViewStatus(fileId, !current);
       toast.success(!current ? "تم تفعيل المشاهدة" : "تم تعطيل المشاهدة");
-      await loadData();
     } catch {
       toast.error("حدث خطأ أثناء تغيير الحالة");
     }
@@ -741,7 +764,6 @@ export default function SubjectPage() {
     try {
       await toggleAssessmentFreeStatus(assessmentId, !currentIsFree);
       toast.success(!currentIsFree ? "تم جعل الاختبار مجاني" : "تم جعل الاختبار للمشتركين فقط");
-      await loadData();
     } catch {
       toast.error("حدث خطأ أثناء تغيير الحالة");
     }
@@ -751,7 +773,6 @@ export default function SubjectPage() {
     try {
       await toggleVideoHidden(videoId, !current);
       toast.success(!current ? "تم إخفاء الفيديو عن الطلاب" : "تم إظهار الفيديو للطلاب");
-      await loadData();
     } catch {
       toast.error("حدث خطأ أثناء تغيير الحالة");
     }
@@ -761,7 +782,6 @@ export default function SubjectPage() {
     try {
       await toggleFileHidden(fileId, !current);
       toast.success(!current ? "تم إخفاء الملف عن الطلاب" : "تم إظهار الملف للطلاب");
-      await loadData();
     } catch {
       toast.error("حدث خطأ أثناء تغيير الحالة");
     }
@@ -771,7 +791,6 @@ export default function SubjectPage() {
     try {
       await toggleAssessmentHidden(assessmentId, !current);
       toast.success(!current ? "تم إخفاء الاختبار عن الطلاب" : "تم إظهار الاختبار للطلاب");
-      await loadData();
     } catch {
       toast.error("حدث خطأ أثناء تغيير الحالة");
     }
@@ -904,7 +923,7 @@ export default function SubjectPage() {
     }
   };
 
-  if (loading) {
+  if (loading && id) {
     return (
       <div className="min-h-screen bg-white">
         <Navbar />
@@ -1887,18 +1906,29 @@ function VideoCard({
       if (!document.hidden) tick();
     };
 
+    // Named handlers so cleanup can actually detach them — anonymous listeners
+    // stayed attached to the <video> element for the life of the page.
+    const onMediaPlay = () => {
+      isPausedRef.current = false;
+      last = Date.now();
+    };
+    const onMediaPause = () => {
+      isPausedRef.current = true;
+      fire(0);
+    };
+
     const interval = setInterval(tick, 5000);
 
     document.addEventListener("visibilitychange", onVisible);
-    if (videoElRef.current) {
-      const v = videoElRef.current;
-      v.addEventListener("play", () => { isPausedRef.current = false; last = Date.now(); });
-      v.addEventListener("pause", () => { isPausedRef.current = true; fire(0); });
-    }
+    const media = videoElRef.current;
+    media?.addEventListener("play", onMediaPlay);
+    media?.addEventListener("pause", onMediaPause);
 
     return () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
+      media?.removeEventListener("play", onMediaPlay);
+      media?.removeEventListener("pause", onMediaPause);
       fire(0);
     };
   }, [isActive, canPlay, video.id, player.kind, video.url]);

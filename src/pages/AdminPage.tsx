@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { collection, onSnapshot, doc, setDoc, getDoc, deleteDoc } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
@@ -62,11 +62,9 @@ import { useAuthStore } from "@/store/authStore";
 import { useTrialStore } from "@/store/trialStore";
 import toast from "react-hot-toast";
 import {
-  getSubjects,
   createSubject,
   deleteSubject,
   updateSubject,
-  getStudents,
   createStudent,
   updateStudent,
   deleteStudent,
@@ -135,7 +133,10 @@ export default function AdminPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [totalVideos, setTotalVideos] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
-  const [loading, setLoading] = useState(true);
+  // `loading` used to be flipped by a separate getSubjects() that ran alongside the
+  // snapshot. Now it simply means "the first subjects snapshot hasn't arrived yet".
+  const [subjectsReady, setSubjectsReady] = useState(false);
+  const loading = !subjectsReady;
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
@@ -146,6 +147,7 @@ export default function AdminPage() {
   const [resetting, setResetting] = useState(false);
 
   // ─── Material quiz results (نتائج اختبار المواد) ──
+  const [tab, setTab] = useState("subjects");
   const [materialQuizResults, setMaterialQuizResults] = useState<QuizResult[]>([]);
   const [openQuizSubject, setOpenQuizSubject] = useState<string | null>(null);
   const [openMaterialQuizId, setOpenMaterialQuizId] = useState<string | null>(null);
@@ -153,27 +155,64 @@ export default function AdminPage() {
   const [doneMarks, setDoneMarks] = useState<MaterialQuizDone[]>([]);
   const [allMaterialQuizzes, setAllMaterialQuizzes] = useState<Quiz[]>([]);
 
-  useEffect(() => subscribeAllMaterialQuizResults(setMaterialQuizResults), []);
+  // These three listeners each download a whole collection, so they only run while
+  // a tab that reads them is open. Done marks + quiz list feed the students table,
+  // the results feed analytics.
+  const needsMaterialData = tab === "students" || tab === "analytics";
+
+  useEffect(
+    () => (needsMaterialData ? subscribeAllMaterialQuizResults(setMaterialQuizResults) : undefined),
+    [needsMaterialData]
+  );
   useEffect(
     () =>
-      subscribeAllMaterialQuizDone(setDoneMarks, (err) =>
-        console.error("materialQuizDone snapshot error:", err)
-      ),
-    []
+      needsMaterialData
+        ? subscribeAllMaterialQuizDone(setDoneMarks, (err) =>
+            console.error("materialQuizDone snapshot error:", err)
+          )
+        : undefined,
+    [needsMaterialData]
   );
   useEffect(
-    () => subscribeAllMaterialQuizzes(setAllMaterialQuizzes, (err) => console.error("materialQuizzes snapshot error:", err)),
-    []
+    () =>
+      needsMaterialData
+        ? subscribeAllMaterialQuizzes(setAllMaterialQuizzes, (err) =>
+            console.error("materialQuizzes snapshot error:", err)
+          )
+        : undefined,
+    [needsMaterialData]
   );
 
-  // done / total visible interactive quizzes for a student (optionally per subject)
+  // done / total visible interactive quizzes per student, precomputed once per
+  // snapshot instead of re-filtering both arrays for every table cell.
+  const doneProgressBySubject = useMemo(() => {
+    const visibleTotal = new Map<string, number>();
+    for (const q of allMaterialQuizzes) {
+      if (q.isHidden) continue;
+      visibleTotal.set(q.subjectId, (visibleTotal.get(q.subjectId) ?? 0) + 1);
+    }
+    const doneCount = new Map<string, number>();
+    for (const m of doneMarks) {
+      if (!m.done) continue;
+      doneCount.set(m.username, (doneCount.get(m.username) ?? 0) + 1);
+    }
+    const doneInSubject = new Map<string, number>();
+    for (const m of doneMarks) {
+      if (!m.done) continue;
+      const key = `${m.username}|${m.subjectId}`;
+      doneInSubject.set(key, (doneInSubject.get(key) ?? 0) + 1);
+    }
+    return { visibleTotal, doneCount, doneInSubject };
+  }, [allMaterialQuizzes, doneMarks]);
+
   const quizDoneProgress = (username: string, subjectId?: string) => {
-    const total = allMaterialQuizzes.filter(
-      (q) => !q.isHidden && (!subjectId || q.subjectId === subjectId)
-    ).length;
-    const raw = doneMarks.filter(
-      (m) => m.done && m.username === username && (!subjectId || m.subjectId === subjectId)
-    ).length;
+    const { visibleTotal, doneCount, doneInSubject } = doneProgressBySubject;
+    const total = subjectId
+      ? (visibleTotal.get(subjectId) ?? 0)
+      : [...visibleTotal.values()].reduce((sum, n) => sum + n, 0);
+    const raw = subjectId
+      ? (doneInSubject.get(`${username}|${subjectId}`) ?? 0)
+      : (doneCount.get(username) ?? 0);
     return { done: Math.min(raw, total), total };
   };
 
@@ -204,11 +243,23 @@ export default function AdminPage() {
     return subscribeQuizzesBySubject(arenaSubjectId, setArenaQuizzes);
   }, [arenaSubjectId]);
 
+  // The arena status badge only changes when a challenge window opens or closes.
+  // The old 30s interval re-rendered the entire admin page — every tab, table row
+  // and dialog — twice a minute for a handful of booleans. Now we wake at the next
+  // real boundary, capped at an hour so a suspended tab can't read a stale badge.
   const [arenaNow, setArenaNow] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setArenaNow(Date.now()), 30000);
-    return () => clearInterval(t);
-  }, []);
+    const current = Date.now();
+    const nextBoundary = subjects
+      .flatMap((s) => [s.challengeStartDate, s.challengeEndDate])
+      .filter((d): d is string => !!d)
+      .map((d) => new Date(d).getTime())
+      .filter((t) => t > current)
+      .sort((a, b) => a - b)[0];
+    if (nextBoundary === undefined) return;
+    const t = setTimeout(() => setArenaNow(Date.now()), Math.min(nextBoundary - current + 250, 60 * 60 * 1000));
+    return () => clearTimeout(t);
+  }, [subjects, arenaNow]);
 
   const openArenaSubject = (subject: Subject) => {
     setArenaSubjectId(subject.id);
@@ -368,10 +419,31 @@ export default function AdminPage() {
   });
   const [passwordAutoFormat, setPasswordAutoFormat] = useState(false);
   const [studentSubmitting, setStudentSubmitting] = useState(false);
-  const [devicesDialogStudent, setDevicesDialogStudent] = useState<Student | null>(null);
+  const [devicesDialogStudentId, setDevicesDialogStudentId] = useState<string | null>(null);
 
   // ─── Student Search ──
   const [studentSearch, setStudentSearch] = useState("");
+  // Typing re-renders this whole grouped table. The input keeps the raw value so it
+  // stays responsive, while the heavy filtering/grouping runs against a deferred copy.
+  const deferredStudentSearch = useDeferredValue(studentSearch);
+
+  const filteredStudents = useMemo(() => {
+    const q = deferredStudentSearch.trim().toLowerCase();
+    if (!q) return students;
+    return students.filter(
+      (s) => s.displayName.toLowerCase().includes(q) || s.username.toLowerCase().includes(q)
+    );
+  }, [students, deferredStudentSearch]);
+
+  const groupedStudents = useMemo(() => {
+    const grouped: Record<string, { subject: Subject; students: Student[] }> = {};
+    for (const subject of subjects) {
+      const subjectStudents = filteredStudents.filter((s) => s.enrolledSubjects.includes(subject.id));
+      if (subjectStudents.length > 0) grouped[subject.id] = { subject, students: subjectStudents };
+    }
+    const unassigned = filteredStudents.filter((s) => s.enrolledSubjects.length === 0);
+    return { grouped, unassigned };
+  }, [filteredStudents, subjects]);
 
   // ─── Admins State ──
   const [admins, setAdmins] = useState<Admin[]>([]);
@@ -429,33 +501,11 @@ export default function AdminPage() {
     }
   };
 
-  const loadSubjects = async () => {
-    try {
-      const subjectsData = await getSubjects();
-      setSubjects(sortSubjectsForView(subjectsData));
-    } catch {
-      toast.error("حدث خطأ في تحميل البيانات");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadStudents = async () => {
-    try {
-      const data = await getStudents();
-      setStudents(data);
-      return data;
-    } catch {
-      toast.error("حدث خطأ في تحميل الطلاب");
-    } finally {
-      setStudentsLoading(false);
-    }
-  };
-
+  // Subjects and students are already covered by the realtime snapshots below, so
+  // there is no separate one-shot fetch — every mutation handler used to re-run a
+  // full-collection getDocs that the snapshot immediately overwrote.
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
-    loadSubjects();
-    loadStudents();
     loadAdmins();
     loadTicker();
     loadStats();
@@ -477,8 +527,14 @@ export default function AdminPage() {
     );
     const unsubSubjects = onSnapshot(
       collection(db, "subjects"),
-      (snapshot) => setSubjects(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Subject[]),
-      (err) => console.error("subjects snapshot error:", err)
+      (snapshot) => {
+        setSubjects(sortSubjectsForView(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Subject[]));
+        setSubjectsReady(true);
+      },
+      (err) => {
+        console.error("subjects snapshot error:", err);
+        setSubjectsReady(true);
+      }
     );
     return () => {
       unsubStudents();
@@ -561,7 +617,6 @@ export default function AdminPage() {
       setOpen(false);
       setEditingSubject(null);
       setForm({ name: "", description: "", color: COLORS[0], icon: "BookOpen", code: "", tickerText: "", tickerColor: "#FFD700", tickerBgColor: "#1a1a2e", tickerActive: false, tickerSpeed: 20, tickerFontSize: "14px", countdownActive: false, countdownTitle: "الفترة التجريبية تنتهي خلال", countdownEndDate: "" });
-      await loadSubjects();
     } catch {
       toast.error(editingSubject ? "حدث خطأ أثناء التعديل" : "حدث خطأ أثناء الإضافة");
     } finally {
@@ -574,7 +629,6 @@ export default function AdminPage() {
     try {
       await deleteSubject(id);
       toast.success("تم حذف المادة بنجاح");
-      await loadSubjects();
     } catch {
       toast.error("حدث خطأ أثناء الحذف");
     }
@@ -586,7 +640,6 @@ export default function AdminPage() {
     try {
       await toggleSubjectHidden(subject.id, target);
       toast.success(target ? "تم إخفاء المادة عن الطلاب" : "تم إظهار المادة للطلاب");
-      await loadSubjects();
     } catch {
       toast.error("حدث خطأ أثناء تغيير الحالة");
     }
@@ -726,7 +779,6 @@ export default function AdminPage() {
         toast.success("تم إضافة الطالب بنجاح");
       }
       setStudentDialogOpen(false);
-      await loadStudents();
     } catch (e) {
       console.error("Save student error:", e);
       toast.error("حدث خطأ أثناء حفظ الطالب");
@@ -740,20 +792,23 @@ export default function AdminPage() {
     try {
       await deleteStudent(id);
       toast.success("تم حذف الطالب بنجاح");
-      await loadStudents();
     } catch (err) {
       toast.error(err instanceof Error && err.message ? err.message : "حدث خطأ أثناء الحذف");
     }
   };
+
+  // The devices dialog tracks the student by id and reads the live row, so removing
+  // a device updates it through the existing snapshot instead of a second getDocs.
+  const devicesDialogStudent = useMemo(
+    () => students.find((s) => s.id === devicesDialogStudentId) ?? null,
+    [students, devicesDialogStudentId]
+  );
 
   const handleRemoveDevice = async (studentId: string, deviceId: string) => {
     if (!confirm("هل أنت متأكد من حذف هذا الجهاز؟ سيمكن الطالب من تسجيل جهاز جديد.")) return;
     try {
       await removeDevice(studentId, deviceId);
       toast.success("تم حذف الجهاز بنجاح");
-      const updated = await loadStudents();
-      const found = updated?.find((s) => s.id === studentId);
-      if (found) setDevicesDialogStudent(found);
     } catch {
       toast.error("حدث خطأ أثناء حذف الجهاز");
     }
@@ -888,7 +943,7 @@ export default function AdminPage() {
           </Button>
         </div>
 
-        <Tabs defaultValue="subjects" className="w-full">
+        <Tabs value={tab} onValueChange={setTab} className="w-full">
           <TabsList className="mb-6 w-full max-w-full justify-start overflow-x-auto whitespace-nowrap scrollbar-hide rounded-lg p-[3px]">
             <TabsTrigger value="subjects" className="gap-2 shrink-0">
               <BookOpen className="h-4 w-4" />
@@ -1339,28 +1394,7 @@ export default function AdminPage() {
                   </div>
                 ) : students.length > 0 ? (
                   (() => {
-                    const filtered = students.filter((s) => {
-                      if (!studentSearch.trim()) return true;
-                      const q = studentSearch.toLowerCase();
-                      return (
-                        s.displayName.toLowerCase().includes(q) ||
-                        s.username.toLowerCase().includes(q)
-                      );
-                    });
-
-                    const grouped: Record<string, { subject: Subject; students: Student[] }> = {};
-                    for (const subject of subjects) {
-                      const subjectStudents = filtered.filter((s) =>
-                        s.enrolledSubjects.includes(subject.id)
-                      );
-                      if (subjectStudents.length > 0) {
-                        grouped[subject.id] = { subject, students: subjectStudents };
-                      }
-                    }
-
-                    const unassigned = filtered.filter((s) =>
-                      s.enrolledSubjects.length === 0
-                    );
+                    const { grouped, unassigned } = groupedStudents;
 
                     const totalGroups = Object.keys(grouped).length + (unassigned.length > 0 ? 1 : 0);
 
@@ -1417,7 +1451,7 @@ export default function AdminPage() {
                                             variant="ghost"
                                             size="sm"
                                             className="gap-1"
-                                            onClick={() => setDevicesDialogStudent(student)}
+                                            onClick={() => setDevicesDialogStudentId(student.id)}
                                           >
                                             {student.devices.length === 0 ? (
                                               <span className="text-xs text-muted-foreground">لا يوجد</span>
@@ -1516,7 +1550,7 @@ export default function AdminPage() {
                                           variant="ghost"
                                           size="sm"
                                           className="gap-1"
-                                          onClick={() => setDevicesDialogStudent(student)}
+                                          onClick={() => setDevicesDialogStudentId(student.id)}
                                         >
                                           {student.devices.length === 0 ? (
                                             <span className="text-xs text-muted-foreground">لا يوجد</span>
@@ -2559,7 +2593,7 @@ export default function AdminPage() {
       {/* ════ Devices Dialog ════ */}
       <Dialog
         open={!!devicesDialogStudent}
-        onOpenChange={(open) => !open && setDevicesDialogStudent(null)}
+        onOpenChange={(open) => !open && setDevicesDialogStudentId(null)}
       >
         <DialogContent className="max-w-md" dir="rtl">
           <DialogHeader>

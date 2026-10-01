@@ -459,14 +459,6 @@ export async function getAdmins(): Promise<Admin[]> {
 
 // ─── Student Management ─────────────────────────────────────────
 
-export async function getStudents(): Promise<Student[]> {
-  const snapshot = await getDocs(collection(db, "students"));
-  return snapshot.docs.map((d) => {
-    const data = d.data();
-    return { id: d.id, ...data, createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString() } as Student;
-  });
-}
-
 export async function createStudent(data: {
   username: string;
   password: string;
