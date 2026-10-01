@@ -159,6 +159,16 @@
     outline-offset: 2px;
     border-radius: 4px;
   }
+
+  /* Fallback for browsers without dynamic viewport units (Safari < 15.4,
+     Chrome/Edge < 108). Declared in base so it is emitted before Tailwind's
+     utility rule: modern browsers take 100dvh, older ones keep 100vh instead of
+     dropping min-height entirely. Adding `min-h-screen min-h-dvh` to the markup
+     would NOT work -- Tailwind emits min-h-screen after min-h-dvh, so the plain
+     vh value would win and undo the mobile fix on every browser. */
+  .min-h-dvh {
+    min-height: 100vh;
+  }
 }
 
 /* Motion here is decorative (pulsing dots, 3D card tilts, glow borders). Users who
