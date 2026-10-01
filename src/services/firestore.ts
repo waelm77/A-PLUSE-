@@ -22,18 +22,6 @@ import type { DocumentSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo, Ticker, Admin, DailyVisit, VideoStats, Quiz, QuizOption, QuizResult, StudentMedals, Medal, MaterialQuizDone } from "../types";
 
-const useLocalStorage = false;
-
-// LocalStorage helpers
-function getLocalItems<T>(key: string): T[] {
-  const data = localStorage.getItem(`a-plus-${key}`);
-  return data ? JSON.parse(data) : [];
-}
-
-function setLocalItems<T>(key: string, items: T[]) {
-  localStorage.setItem(`a-plus-${key}`, JSON.stringify(items));
-}
-
 function generateId(): string {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
@@ -81,9 +69,6 @@ export async function seedSubjects() {
 
 // Subjects
 export async function getSubjects(): Promise<Subject[]> {
-  if (useLocalStorage) {
-    return getLocalItems<Subject>("subjects");
-  }
   const snapshot = await getDocs(collection(db, "subjects"));
   return snapshot.docs
     .map((d) => {
@@ -106,11 +91,6 @@ export function subscribeSubjects(
   onData: (items: Subject[]) => void,
   onError?: (err: unknown) => void
 ): () => void {
-  const isLocal = useLocalStorage;
-  if (isLocal) {
-    onData(getLocalItems<Subject>("subjects"));
-    return () => {};
-  }
   const unsub = onSnapshot(
     collection(db, "subjects"),
     (snapshot) => {
@@ -140,10 +120,6 @@ export function subscribeVideosBySubject(
   onData: (items: Video[]) => void,
   onError?: (err: unknown) => void
 ): () => void {
-  if (useLocalStorage) {
-    onData(getLocalItems<Video>("videos").filter((v) => v.subjectId === subjectId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
-    return () => {};
-  }
   const q = query(collection(db, "videos"), where("subjectId", "==", subjectId));
   return onSnapshot(
     q,
@@ -171,10 +147,6 @@ export function subscribeFilesBySubject(
   onData: (items: FileItem[]) => void,
   onError?: (err: unknown) => void
 ): () => void {
-  if (useLocalStorage) {
-    onData(getLocalItems<FileItem>("files").filter((f) => f.subjectId === subjectId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
-    return () => {};
-  }
   const q = query(collection(db, "files"), where("subjectId", "==", subjectId));
   return onSnapshot(
     q,
@@ -202,10 +174,6 @@ export function subscribeAssessmentsBySubject(
   onData: (items: Assessment[]) => void,
   onError?: (err: unknown) => void
 ): () => void {
-  if (useLocalStorage) {
-    onData(getLocalItems<Assessment>("assessments").filter((a) => a.subjectId === subjectId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
-    return () => {};
-  }
   const q = query(collection(db, "assessments"), where("subjectId", "==", subjectId));
   return onSnapshot(
     q,
@@ -226,11 +194,6 @@ export function subscribeAssessmentsBySubject(
 }
 
 export async function getSubjectById(id: string): Promise<Subject | null> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Subject>("subjects");
-    const found = items.find((i) => i.id === id) || null;
-    return found;
-  }
   const d = await getDoc(doc(db, "subjects", id));
   if (!d.exists()) return null;
   const data = d.data();
@@ -246,13 +209,6 @@ export async function createSubject(data: Omit<Subject, "id" | "createdAt">): Pr
   if (!data.code) {
     data.code = generateId().slice(0, 6);
   }
-  if (useLocalStorage) {
-    const items = getLocalItems<Subject>("subjects");
-    const newItem: Subject = { id: generateId(), ...data, createdAt: new Date().toISOString() };
-    items.unshift(newItem);
-    setLocalItems("subjects", items);
-    return newItem;
-  }
   const ref = await addDoc(collection(db, "subjects"), {
     ...data,
     createdAt: serverTimestamp(),
@@ -261,22 +217,10 @@ export async function createSubject(data: Omit<Subject, "id" | "createdAt">): Pr
 }
 
 export async function deleteSubject(id: string): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Subject>("subjects").filter((i) => i.id !== id);
-    setLocalItems("subjects", items);
-    return;
-  }
   await deleteDoc(doc(db, "subjects", id));
 }
 
 export async function updateSubject(id: string, data: Partial<Omit<Subject, "id" | "createdAt">>): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Subject>("subjects").map((s) =>
-      s.id === id ? { ...s, ...data } : s
-    );
-    setLocalItems("subjects", items);
-    return;
-  }
   await updateDoc(doc(db, "subjects", id), data);
 }
 
@@ -309,14 +253,6 @@ function deepClean<T>(value: T): T {
 }
 
 export async function createVideo(data: Omit<Video, "id" | "createdAt">): Promise<Video> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Video>("videos");
-    const maxOrder = items.reduce((m, v) => Math.max(m, v.order ?? 0), -1);
-    const newItem: Video = { id: generateId(), isFree: data.isFree ?? true, order: maxOrder + 1, ...data, createdAt: new Date().toISOString() };
-    items.push(newItem);
-    setLocalItems("videos", items);
-    return newItem;
-  }
   const cleaned = clean(data);
   const videosCol = collection(db, "videos");
   const ref = doc(videosCol);
@@ -332,13 +268,6 @@ export async function createVideo(data: Omit<Video, "id" | "createdAt">): Promis
 }
 
 export async function updateVideo(id: string, data: Partial<Omit<Video, "id" | "createdAt">>): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Video>("videos").map((v) =>
-      v.id === id ? { ...v, ...data } : v
-    );
-    setLocalItems("videos", items);
-    return;
-  }
   await updateDoc(doc(db, "videos", id), clean(data as Record<string, unknown>));
 }
 
@@ -347,14 +276,6 @@ export async function updateVideo(id: string, data: Partial<Omit<Video, "id" | "
  * Uses a batch so the whole reorder is atomic.
  */
 export async function reorderVideos(orderedIds: string[]): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Video>("videos");
-    const byId = new Map(items.map((v) => [v.id, v]));
-    const ordered = orderedIds.map((id) => byId.get(id)).filter(Boolean) as Video[];
-    const rest = items.filter((v) => !orderedIds.includes(v.id));
-    setLocalItems("videos", [...ordered, ...rest].map((v, i) => ({ ...v, order: i })));
-    return;
-  }
   const batch = writeBatch(db);
   orderedIds.forEach((id, index) => {
     batch.update(doc(db, "videos", id), { order: index });
@@ -363,101 +284,44 @@ export async function reorderVideos(orderedIds: string[]): Promise<void> {
 }
 
 export async function deleteVideo(id: string): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Video>("videos").filter((i) => i.id !== id);
-    setLocalItems("videos", items);
-    return;
-  }
   await deleteDoc(doc(db, "videos", id));
   await assertDeleted("videos", id);
 }
 
 export async function toggleVideoFreeStatus(id: string, isFree: boolean): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Video>("videos").map((v) =>
-      v.id === id ? { ...v, isFree } : v
-    );
-    setLocalItems("videos", items);
-    return;
-  }
   await updateDoc(doc(db, "videos", id), { isFree });
 }
 
 export async function toggleFileFreeStatus(id: string, isFree: boolean): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<FileItem>("files").map((f) =>
-      f.id === id ? { ...f, isFree } : f
-    );
-    setLocalItems("files", items);
-    return;
-  }
   await updateDoc(doc(db, "files", id), { isFree });
 }
 
 export async function toggleFileDownloadStatus(id: string, canDownload: boolean): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<FileItem>("files").map((f) =>
-      f.id === id ? { ...f, canDownload } : f
-    );
-    setLocalItems("files", items);
-    return;
-  }
   await updateDoc(doc(db, "files", id), { canDownload });
 }
 
 export async function toggleFileViewStatus(id: string, canView: boolean): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<FileItem>("files").map((f) =>
-      f.id === id ? { ...f, canView } : f
-    );
-    setLocalItems("files", items);
-    return;
-  }
   await updateDoc(doc(db, "files", id), { canView });
 }
 
 export async function toggleAssessmentFreeStatus(id: string, isFree: boolean): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Assessment>("assessments").map((a) =>
-      a.id === id ? { ...a, isFree } : a
-    );
-    setLocalItems("assessments", items);
-    return;
-  }
   await updateDoc(doc(db, "assessments", id), { isFree });
 }
 
-async function toggleHiddenLocal<T extends { id: string }>(key: string, id: string, isHidden: boolean): Promise<void> {
-  const items = getLocalItems<T>(key).map((i) => (i.id === id ? { ...i, isHidden } as T : i));
-  setLocalItems(key, items);
-}
-
 export async function toggleVideoHidden(id: string, isHidden: boolean): Promise<void> {
-  if (useLocalStorage) return toggleHiddenLocal<Video>("videos", id, isHidden);
   await updateDoc(doc(db, "videos", id), { isHidden });
 }
 
 export async function toggleFileHidden(id: string, isHidden: boolean): Promise<void> {
-  if (useLocalStorage) return toggleHiddenLocal<FileItem>("files", id, isHidden);
   await updateDoc(doc(db, "files", id), { isHidden });
 }
 
 export async function toggleAssessmentHidden(id: string, isHidden: boolean): Promise<void> {
-  if (useLocalStorage) return toggleHiddenLocal<Assessment>("assessments", id, isHidden);
   await updateDoc(doc(db, "assessments", id), { isHidden });
 }
 
 // Subject hiding: when hiding, push to the bottom (visible always on top).
 export async function toggleSubjectHidden(id: string, isHidden: boolean): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Subject>("subjects");
-    const maxOrder = items.reduce((m, s) => Math.max(m, s.order ?? 0), -1);
-    const next = items.map((s) =>
-      s.id === id ? { ...s, isHidden, order: isHidden ? maxOrder + 1 : 0 } as Subject : s
-    );
-    setLocalItems("subjects", next);
-    return;
-  }
   const subjects = await getSubjects();
   const maxOrder = subjects.reduce((m, s) => Math.max(m, s.order ?? 0), -1);
   const order = isHidden ? maxOrder + 1 : 0;
@@ -483,14 +347,6 @@ export function getVisibleSubjects(subjects: Subject[]): Subject[] {
 
 // Persists a new display order for a list of subject ids (index = order).
 export async function reorderSubjects(orderedIds: string[]): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Subject>("subjects");
-    const byId = new Map(items.map((s) => [s.id, s]));
-    const ordered = orderedIds.map((id) => byId.get(id)).filter(Boolean) as Subject[];
-    const rest = items.filter((s) => !orderedIds.includes(s.id));
-    setLocalItems("subjects", [...ordered, ...rest].map((s, i) => ({ ...s, order: i })));
-    return;
-  }
   const batch = writeBatch(db);
   orderedIds.forEach((id, index) => {
     batch.update(doc(db, "subjects", id), { order: index });
@@ -500,14 +356,6 @@ export async function reorderSubjects(orderedIds: string[]): Promise<void> {
 
 // Files
 export async function reorderFiles(orderedIds: string[]): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<FileItem>("files");
-    const byId = new Map(items.map((f) => [f.id, f]));
-    const ordered = orderedIds.map((id) => byId.get(id)).filter(Boolean) as FileItem[];
-    const rest = items.filter((f) => !orderedIds.includes(f.id));
-    setLocalItems("files", [...ordered, ...rest].map((f, i) => ({ ...f, order: i })));
-    return;
-  }
   const batch = writeBatch(db);
   orderedIds.forEach((id, index) => {
     batch.update(doc(db, "files", id), { order: index });
@@ -516,14 +364,6 @@ export async function reorderFiles(orderedIds: string[]): Promise<void> {
 }
 
 export async function reorderAssessments(orderedIds: string[]): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Assessment>("assessments");
-    const byId = new Map(items.map((a) => [a.id, a]));
-    const ordered = orderedIds.map((id) => byId.get(id)).filter(Boolean) as Assessment[];
-    const rest = items.filter((a) => !orderedIds.includes(a.id));
-    setLocalItems("assessments", [...ordered, ...rest].map((a, i) => ({ ...a, order: i })));
-    return;
-  }
   const batch = writeBatch(db);
   orderedIds.forEach((id, index) => {
     batch.update(doc(db, "assessments", id), { order: index });
@@ -532,23 +372,6 @@ export async function reorderAssessments(orderedIds: string[]): Promise<void> {
 }
 
 export async function createFile(data: Omit<FileItem, "id" | "createdAt" | "downloads">): Promise<FileItem> {
-  if (useLocalStorage) {
-    const items = getLocalItems<FileItem>("files");
-    const maxOrder = items.reduce((m, f) => Math.max(m, f.order ?? 0), -1);
-    const newItem: FileItem = {
-      id: generateId(),
-      ...data,
-      order: maxOrder + 1,
-      isFree: data.isFree ?? true,
-      canDownload: data.canDownload ?? true,
-      canView: data.canView ?? true,
-      downloads: 0,
-      createdAt: new Date().toISOString(),
-    };
-    items.push(newItem);
-    setLocalItems("files", items);
-    return newItem;
-  }
   const filesCol = collection(db, "files");
   const ref = doc(filesCol);
   const counterRef = doc(db, "counters", `files:${data.subjectId}`);
@@ -580,25 +403,12 @@ export async function createFile(data: Omit<FileItem, "id" | "createdAt" | "down
 }
 
 export async function deleteFile(id: string): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<FileItem>("files").filter((i) => i.id !== id);
-    setLocalItems("files", items);
-    return;
-  }
   await deleteDoc(doc(db, "files", id));
   await assertDeleted("files", id);
 }
 
 // Assessments (Practice Tests)
 export async function createAssessment(data: Omit<Assessment, "id" | "createdAt">): Promise<Assessment> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Assessment>("assessments");
-    const maxOrder = items.reduce((m, i) => Math.max(m, i.order ?? 0), -1);
-    const newItem: Assessment = { id: generateId(), ...data, isFree: data.isFree ?? true, createdAt: new Date().toISOString(), order: maxOrder + 1 };
-    items.push(newItem);
-    setLocalItems("assessments", items);
-    return newItem;
-  }
   const assessmentsCol = collection(db, "assessments");
   const ref = doc(assessmentsCol);
   const counterRef = doc(db, "counters", `assessments:${data.subjectId}`);
@@ -618,11 +428,6 @@ export async function createAssessment(data: Omit<Assessment, "id" | "createdAt"
 }
 
 export async function deleteAssessment(id: string): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Assessment>("assessments").filter((i) => i.id !== id);
-    setLocalItems("assessments", items);
-    return;
-  }
   await deleteDoc(doc(db, "assessments", id));
   await assertDeleted("assessments", id);
 }
@@ -655,9 +460,6 @@ export async function getAdmins(): Promise<Admin[]> {
 // ─── Student Management ─────────────────────────────────────────
 
 export async function getStudents(): Promise<Student[]> {
-  if (useLocalStorage) {
-    return getLocalItems<Student>("students");
-  }
   const snapshot = await getDocs(collection(db, "students"));
   return snapshot.docs.map((d) => {
     const data = d.data();
@@ -671,22 +473,6 @@ export async function createStudent(data: {
   displayName: string;
   enrolledSubjects: string[];
 }): Promise<Student> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Student>("students");
-    const newItem: Student = {
-      id: generateId(),
-      username: data.username,
-      password: data.password,
-      displayName: data.displayName,
-      isActive: true,
-      enrolledSubjects: data.enrolledSubjects,
-      devices: [],
-      createdAt: new Date().toISOString(),
-    };
-    items.push(newItem);
-    setLocalItems("students", items);
-    return newItem;
-  }
   const ref = await addDoc(collection(db, "students"), {
     ...data,
     isActive: true,
@@ -706,31 +492,15 @@ export async function updateStudent(
   id: string,
   data: { displayName?: string; password?: string; enrolledSubjects?: string[]; isActive?: boolean }
 ): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Student>("students").map((s) =>
-      s.id === id ? { ...s, ...data } : s
-    );
-    setLocalItems("students", items);
-    return;
-  }
   await updateDoc(doc(db, "students", id), data);
 }
 
 export async function deleteStudent(id: string): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Student>("students").filter((s) => s.id !== id);
-    setLocalItems("students", items);
-    return;
-  }
   await deleteDoc(doc(db, "students", id));
   await assertDeleted("students", id);
 }
 
 async function getStudentByUsername(username: string): Promise<Student | null> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Student>("students");
-    return items.find((s) => s.username === username) || null;
-  }
   const q = query(collection(db, "students"), where("username", "==", username));
   const snapshot = await getDocs(q);
   if (snapshot.empty) return null;
@@ -764,38 +534,6 @@ export async function registerDevice(
   studentId: string,
   deviceInfo: DeviceInfo
 ): Promise<{ success: boolean; error?: string }> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Student>("students");
-    const idx = items.findIndex((s) => s.id === studentId);
-    if (idx === -1) return { success: false, error: "الطالب غير موجود" };
-
-    const student = items[idx];
-    const existingDevice = student.devices.find((d) => d.deviceId === deviceInfo.deviceId);
-    if (existingDevice) {
-      // تحديث تاريخ آخر وصول
-      student.devices = student.devices.map((d) =>
-        d.deviceId === deviceInfo.deviceId
-          ? { ...d, lastAccess: deviceInfo.lastAccess }
-          : d
-      );
-      items[idx] = student;
-      setLocalItems("students", items);
-      return { success: true };
-    }
-
-    if (student.devices.length >= 2) {
-      return {
-        success: false,
-        error: "لقد وصلت للحد الأقصى من الأجهزة المسموح بها (2). يرجى التواصل مع الأدمن لإزالة أحد أجهزتك",
-      };
-    }
-
-    student.devices.push(deviceInfo);
-    items[idx] = student;
-    setLocalItems("students", items);
-    return { success: true };
-  }
-
   // Firestore — atomic read+check+write so two simultaneous registrations
   // can never push a student's device count past the limit.
   const studentRef = doc(db, "students", studentId);
@@ -843,15 +581,6 @@ export async function registerDevice(
 }
 
 export async function removeDevice(studentId: string, deviceId: string): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Student>("students").map((s) =>
-      s.id === studentId
-        ? { ...s, devices: s.devices.filter((d) => d.deviceId !== deviceId) }
-        : s
-    );
-    setLocalItems("students", items);
-    return;
-  }
   const studentRef = doc(db, "students", studentId);
   const studentSnap = await getDoc(studentRef);
   if (!studentSnap.exists()) return;
