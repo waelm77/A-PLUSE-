@@ -1148,7 +1148,7 @@ export default function AdminPage() {
                                 aria-pressed={form.tickerColor === c}
                                 onClick={() => setForm({ ...form, tickerColor: c })}
                                 className={`h-8 w-8 rounded-full border-2 transition-all ${
-                                  form.tickerColor === c ? "border-black scale-110" : "border-transparent"
+                                  form.tickerColor === c ? "border-white scale-110" : "border-transparent"
                                 }`}
                                 style={{ backgroundColor: c }}
                               />
@@ -1776,7 +1776,7 @@ export default function AdminPage() {
                             aria-pressed={ticker.color === c}
                             onClick={() => setTicker({ ...ticker, color: c })}
                             className={`h-8 w-8 rounded-full border-2 transition-all ${
-                              ticker.color === c ? "border-black scale-110" : "border-transparent"
+                              ticker.color === c ? "border-white scale-110" : "border-transparent"
                             }`}
                             style={{ backgroundColor: c }}
                           />
