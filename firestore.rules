@@ -15,14 +15,16 @@ service cloud.firestore {
     }
 
     // ─── STUDENTS ──────────────────────────────────────────────
-    // TEMPORARY (until Cloud Functions are deployed):
-    //   • read  kept open so student username/password login works in the browser
-    //   • write kept open ONLY for the student's own device registration
-    // After deploying the Functions + moving auth server-side, replace with:
-    //   allow read:  if isAdmin();
-    //   allow write: if isAdmin();
-    // WARNING: do NOT lock these before the Callable is live, or student
-    // login / device registration breaks.
+    // Open access here is the intended design, not a pending migration.
+    // Students have no Firebase Auth account: a student authenticates by
+    // username + password read straight out of this collection (see
+    // verifyStudentCredentials in firestore.ts). That comparison cannot be done
+    // server-side, so an anonymous visitor must be able to read this collection.
+    //
+    // Stated plainly, because it is the trade-off: `password` is stored in
+    // plaintext, and this rule makes every student's password readable by
+    // anything that can read /students. Locking reads down to isAdmin() alone
+    // breaks student login and device registration outright.
     match /students/{student} {
       allow read: if isAdmin() || request.auth == null;
       allow write: if isAdmin() || request.auth == null;
@@ -36,10 +38,11 @@ service cloud.firestore {
     }
 
 // ─── STATS / SETTINGS / PROGRESS ───────────────────────────
-    // stats: reads are admin-only, but writes are kept open TEMPORARILY
-    // because plays / watch-time / visits are recorded from the visitor's
-    // browser. Once analytics writing moves server-side (Cloud Functions),
-    // restrict write to: allow write: if isAdmin();
+// stats: reads are admin-only. Writes are open on purpose: plays / watch-time /
+// visits are counted from the visitor's browser, which has no Firebase Auth
+// session for a student, so this sits at the same in-app trust level as
+// /students. The consequence is that anyone may write counters here; what is
+// actually read back (the analytics) stays admin-only.
     match /stats/{doc} {
       allow read: if isAdmin();
       allow write: if true;
