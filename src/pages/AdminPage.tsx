@@ -99,6 +99,7 @@ import {
   materialQuizSubjectRows,
   materialQuizBuckets,
 } from "@/lib/materialQuizStats";
+import { findDuplicateUsername, normalizeSecretCode } from "@/lib/studentForm";
 
 // Students' self-marked quiz completion, shown in the students table.
 function DoneProgressCell({ done, total }: { done: number; total: number }) {
@@ -661,40 +662,46 @@ export default function AdminPage() {
   };
 
   // A username must stay unique: login looks up by username and takes the first
-  // match, so a duplicate silently blocks BOTH students from signing in. The
-  // live `students` snapshot feeds this check — real-time, no extra query.
-  const findDuplicateStudent = (username: string): Student | null => {
-    const u = username.trim().toLowerCase();
-    if (!u) return null;
-    return students.find((s) => s.username.trim().toLowerCase() === u) ?? null;
-  };
-  const duplicateStudent = findDuplicateStudent(studentForm.username);
+  // match, so a duplicate silently blocks BOTH students from signing in. The live
+  // `students` snapshot feeds this check — real-time, no extra query. The student
+  // being edited is never counted as a duplicate of themselves.
+  const duplicateStudent = findDuplicateUsername(
+    students,
+    studentForm.username,
+    editingStudent?.id
+  );
 
   const openEditStudent = (student: Student) => {
     setEditingStudent(student);
     setStudentForm({
       username: student.username,
-      password: "",
+      password: student.password || "",
       displayName: student.displayName,
       enrolledSubjects: student.enrolledSubjects,
     });
-    setPasswordAutoFormat(false);
+    // Show the stored secret grouped (123 456) so the admin can read/copy it.
+    setPasswordAutoFormat(true);
     setStudentDialogOpen(true);
   };
 
   const handleStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanPassword = studentForm.password.replace(/\s+/g, "");
+    const cleanPassword = normalizeSecretCode(studentForm.password);
     const missing: string[] = [];
     if (!studentForm.username.trim()) missing.push("اسم المستخدم");
-    if (!editingStudent && !cleanPassword) missing.push("كلمة السر");
+    if (!cleanPassword && !editingStudent?.password) missing.push("كلمة السر");
     if (!studentForm.displayName.trim()) missing.push("اسم الطالب");
     if (studentForm.enrolledSubjects.length === 0) missing.push("المادة");
     if (missing.length) {
       toast.error(`أحد البيانات فارغ: ${missing.join("، ")}`);
       return;
     }
-    if (!editingStudent && findDuplicateStudent(studentForm.username)) {
+    // Never leave a student account without a secret to log in with.
+    if (!cleanPassword && editingStudent) {
+      toast.error("كلمة السر لا يمكن أن تكون فارغة");
+      return;
+    }
+    if (findDuplicateUsername(students, studentForm.username, editingStudent?.id)) {
       toast.error("اسم المستخدم مستخدم بالفعل — اختر اسمًا آخر");
       return;
     }
@@ -2432,40 +2439,45 @@ let status: { label: string; cls: string } = { label: "غير مفعّل", cls: 
               )}
             </div>
             <div>
-              <Label htmlFor="s-password">
-                {editingStudent ? "كلمة السر (اترك فارغًا إن لم ترد التغيير)" : "كلمة السر"}
-              </Label>
+              <Label htmlFor="s-password">كلمة السر</Label>
               <div className="flex gap-2">
                 <Input
                   id="s-password"
                   type="text"
                   inputMode="numeric"
                   dir="ltr"
-                  value={passwordAutoFormat ? formatSecret(studentForm.password) : studentForm.password}
+                  value={
+                    passwordAutoFormat && /^\d+$/.test(studentForm.password)
+                      ? formatSecret(studentForm.password)
+                      : studentForm.password
+                  }
                   onChange={(e) => {
                     const digits = e.target.value.replace(/\D/g, "").slice(0, 15);
                     setPasswordAutoFormat(false);
                     setStudentForm({ ...studentForm, password: digits });
                   }}
-                  placeholder={editingStudent ? "اترك فارغًا للإبقاء على القديمة" : ""}
+                  placeholder={editingStudent?.password ? "" : "مثال: 123456"}
                   className="font-mono tracking-wider text-center"
                 />
-                {!editingStudent && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="shrink-0"
-                    title="توليد كلمة سر عشوائية"
-                    onClick={() => {
-                      setStudentForm({ ...studentForm, password: generateSecretCode() });
-                      setPasswordAutoFormat(true);
-                    }}
-                  >
-                    <Sparkles className="h-4 w-4" />
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  title="توليد كلمة سر عشوائية"
+                  onClick={() => {
+                    setStudentForm({ ...studentForm, password: generateSecretCode() });
+                    setPasswordAutoFormat(true);
+                  }}
+                >
+                  <Sparkles className="h-4 w-4" />
+                </Button>
               </div>
+              {editingStudent && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  الرقم السري الحالي ظاهر أعلاه — للتغيير امسحه واكتب رقماً جديداً أو استخدم زر التوليد.
+                </p>
+              )}
             </div>
             <div>
               <Label htmlFor="s-name">اسم الطالب</Label>
