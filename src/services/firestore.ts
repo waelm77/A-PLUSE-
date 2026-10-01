@@ -57,19 +57,6 @@ export async function seedSubjects() {
   try {
     if (localStorage.getItem(SEED_FLAG)) return;
     localStorage.setItem(SEED_FLAG, "1");
-    if (useLocalStorage) {
-      const existing = getLocalItems<Subject>("subjects");
-      if (existing.length > 0) return;
-      const defaults: Subject[] = [
-        { id: generateId(), name: "الكيمياء العامة", description: "شرح شامل لمبادئ الكيمياء لطلاب السنة التحضيرية", color: "#00BCD4", icon: "FlaskConical", code: "chem101", createdAt: new Date().toISOString() },
-        { id: generateId(), name: "الفيزياء العامة", description: "أساسيات الفيزياء الميكانيكية والكهربائية", color: "#3F51B5", icon: "Atom", code: "phys101", createdAt: new Date().toISOString() },
-        { id: generateId(), name: "الكيمياء الحيوية", description: "دراسة العمليات الكيميائية داخل الكائنات الحية", color: "#E91E63", icon: "Dna", code: "biochem101", createdAt: new Date().toISOString() },
-        { id: generateId(), name: "التشريح", description: "دراسة بنية جسم الإنسان وأنظمته المختلفة", color: "#F44336", icon: "Heart", code: "anat101", createdAt: new Date().toISOString() },
-      ];
-      setLocalItems("subjects", defaults);
-      seedContent(defaults[0].id);
-      return;
-    }
     const existing = await getSubjects();
     if (existing.length === 0) {
       const defaults = [
@@ -89,77 +76,6 @@ export async function seedSubjects() {
     }
   } catch {
     // ignore
-  }
-}
-
-async function seedContent(subjectId: string) {
-  if (!useLocalStorage) return;
-
-  const existingVideos = getLocalItems<Video>("videos");
-  if (existingVideos.length === 0) {
-    const videos: Video[] = [
-      {
-        id: generateId(),
-        subjectId,
-        title: "مقدمة في الكيمياء العامة",
-        type: "theory",
-        sourceType: "youtube",
-        url: "https://www.youtube.com/watch?v=k3rRrl9J2F4",
-        thumbnail: "https://img.youtube.com/vi/k3rRrl9J2F4/mqdefault.jpg",
-        duration: "10:15",
-        isFree: true,
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: generateId(),
-        subjectId,
-        title: "مراجعة الفصل الأول",
-        type: "review",
-        sourceType: "youtube",
-        url: "https://www.youtube.com/watch?v=k3rRrl9J2F4",
-        thumbnail: "https://img.youtube.com/vi/k3rRrl9J2F4/mqdefault.jpg",
-        duration: "05:30",
-        isFree: false,
-        createdAt: new Date().toISOString(),
-      },
-    ];
-    setLocalItems("videos", videos);
-  }
-
-  const existingFiles = getLocalItems<FileItem>("files");
-  if (existingFiles.length === 0) {
-    const files: FileItem[] = [
-      {
-        id: generateId(),
-        subjectId,
-        title: "ملخص قوانين الكيمياء",
-        fileType: "pdf",
-        size: "1.2 MB",
-        downloadUrl: "https://www.orimi.com/pdf-test.pdf",
-        downloads: 12,
-        isFree: true,
-        canDownload: true,
-        canView: true,
-        createdAt: new Date().toISOString(),
-      },
-    ];
-    setLocalItems("files", files);
-  }
-
-  const existingAssessments = getLocalItems<Assessment>("assessments");
-  if (existingAssessments.length === 0) {
-    const assessments: Assessment[] = [
-      {
-        id: generateId(),
-        subjectId,
-        title: "اختبار تجريبي - الوحدة الأولى",
-        url: "https://docs.google.com/forms/d/e/1FAIpQLSfD7P-S2qZ0E-yX-T8X0-W-Y-M-R-X-E/viewform",
-        isFree: true,
-        order: 0,
-        createdAt: new Date().toISOString(),
-      },
-    ];
-    setLocalItems("assessments", assessments);
   }
 }
 
@@ -313,7 +229,6 @@ export async function getSubjectById(id: string): Promise<Subject | null> {
   if (useLocalStorage) {
     const items = getLocalItems<Subject>("subjects");
     const found = items.find((i) => i.id === id) || null;
-    console.log("getSubjectById (local):", id, "found:", found);
     return found;
   }
   const d = await getDoc(doc(db, "subjects", id));
@@ -324,7 +239,6 @@ export async function getSubjectById(id: string): Promise<Subject | null> {
     ...data,
     createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
   } as Subject;
-  console.log("getSubjectById (firebase):", id, "found:", found);
   return found;
 }
 
@@ -367,28 +281,6 @@ export async function updateSubject(id: string, data: Partial<Omit<Subject, "id"
 }
 
 // Videos
-
-export async function getVideosBySubject(subjectId: string): Promise<Video[]> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Video>("videos").filter((v) => v.subjectId === subjectId);
-    return items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }
-  const q = query(
-    collection(db, "videos"),
-    where("subjectId", "==", subjectId)
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs
-    .map((d) => {
-      const data = d.data();
-      return {
-        id: d.id,
-        ...data,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-      } as Video;
-    })
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-}
 
 function clean<T extends Record<string, unknown>>(obj: T): T {
   const cleaned = { ...obj } as Record<string, unknown>;
@@ -607,36 +499,6 @@ export async function reorderSubjects(orderedIds: string[]): Promise<void> {
 }
 
 // Files
-export async function getAllFiles(): Promise<FileItem[]> {
-  if (useLocalStorage) {
-    return getLocalItems<FileItem>("files");
-  }
-  const snapshot = await getDocs(collection(db, "files"));
-  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as FileItem));
-}
-
-export async function getFilesBySubject(subjectId: string): Promise<FileItem[]> {
-  if (useLocalStorage) {
-    const items = getLocalItems<FileItem>("files").filter((f) => f.subjectId === subjectId);
-    return items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }
-  const q = query(
-    collection(db, "files"),
-    where("subjectId", "==", subjectId)
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs
-    .map((d) => {
-      const data = d.data();
-      return {
-        id: d.id,
-        ...data,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-      } as FileItem;
-    })
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-}
-
 export async function reorderFiles(orderedIds: string[]): Promise<void> {
   if (useLocalStorage) {
     const items = getLocalItems<FileItem>("files");
@@ -717,17 +579,6 @@ export async function createFile(data: Omit<FileItem, "id" | "createdAt" | "down
   };
 }
 
-export async function incrementFileDownloads(id: string): Promise<void> {
-  if (useLocalStorage) {
-    const items = getLocalItems<FileItem>("files").map((f) =>
-      f.id === id ? { ...f, downloads: f.downloads + 1 } : f
-    );
-    setLocalItems("files", items);
-    return;
-  }
-  await updateDoc(doc(db, "files", id), { downloads: increment(1) });
-}
-
 export async function deleteFile(id: string): Promise<void> {
   if (useLocalStorage) {
     const items = getLocalItems<FileItem>("files").filter((i) => i.id !== id);
@@ -739,28 +590,6 @@ export async function deleteFile(id: string): Promise<void> {
 }
 
 // Assessments (Practice Tests)
-export async function getAssessmentsBySubject(subjectId: string): Promise<Assessment[]> {
-  if (useLocalStorage) {
-    const items = getLocalItems<Assessment>("assessments").filter((a) => a.subjectId === subjectId);
-    return items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }
-  const q = query(
-    collection(db, "assessments"),
-    where("subjectId", "==", subjectId)
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs
-    .map((d) => {
-      const data = d.data();
-      return {
-        id: d.id,
-        ...data,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-      } as Assessment;
-    })
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-}
-
 export async function createAssessment(data: Omit<Assessment, "id" | "createdAt">): Promise<Assessment> {
   if (useLocalStorage) {
     const items = getLocalItems<Assessment>("assessments");
@@ -811,58 +640,6 @@ export function toggleLocalProgress(userId: string, itemId: string): string[] {
     : [...current, itemId];
   localStorage.setItem(`a-plus-progress-${userId}`, JSON.stringify(updated));
   return updated;
-}
-
-// User Profile & Enrolled Subjects
-export async function getUserProfile(userId: string) {
-  if (useLocalStorage) {
-    const data = localStorage.getItem(`a-plus-user-${userId}`);
-    return data ? JSON.parse(data) : { enrolled_subjects: [] };
-  }
-  const userDoc = await getDoc(doc(db, "users", userId));
-  if (userDoc.exists()) {
-    return userDoc.data();
-  }
-  return { enrolled_subjects: [] };
-}
-
-export async function activateSubject(userId: string, subjectId: string, code: string): Promise<boolean> {
-  // Get the subject to check its activation code
-  const subject = await getSubjectById(subjectId);
-  if (!subject) {
-    throw new Error("المادة غير موجودة");
-  }
-  if (code !== subject.code) {
-    throw new Error("كود التفعيل غير صحيح");
-  }
-
-  if (useLocalStorage) {
-    const profile = await getUserProfile(userId);
-    const enrolled = profile.enrolled_subjects || [];
-    if (!enrolled.includes(subjectId)) {
-      enrolled.push(subjectId);
-    }
-    localStorage.setItem(`a-plus-user-${userId}`, JSON.stringify({ ...profile, enrolled_subjects: enrolled }));
-    return true;
-  }
-
-  const userRef = doc(db, "users", userId);
-  const userSnap = await getDoc(userRef);
-  
-  const userData = userSnap.exists() ? userSnap.data() : { enrolled_subjects: [] };
-  const currentSubjects = userData.enrolled_subjects || [];
-  
-  if (!currentSubjects.includes(subjectId)) {
-    currentSubjects.push(subjectId);
-    
-    if (!userSnap.exists()) {
-      await setDoc(userRef, { enrolled_subjects: currentSubjects }, { merge: true });
-    } else {
-      await updateDoc(userRef, { enrolled_subjects: currentSubjects });
-    }
-  }
-  
-  return true;
 }
 
 // ─── Admin Management ───────────────────────────────────────────
@@ -949,7 +726,7 @@ export async function deleteStudent(id: string): Promise<void> {
   await assertDeleted("students", id);
 }
 
-export async function getStudentByUsername(username: string): Promise<Student | null> {
+async function getStudentByUsername(username: string): Promise<Student | null> {
   if (useLocalStorage) {
     const items = getLocalItems<Student>("students");
     return items.find((s) => s.username === username) || null;
@@ -1150,18 +927,6 @@ export async function getTicker(): Promise<Ticker> {
 
 export async function updateTicker(data: Ticker): Promise<void> {
   await setDoc(doc(db, "settings", "ticker"), data, { merge: true });
-}
-
-// ─── Trial Settings ──────────────────────────────────
-
-export async function getTrialSettings(): Promise<{ endDate: string; active: boolean }> {
-  const snap = await getDoc(doc(db, "settings", "trial"));
-  if (!snap.exists()) return { endDate: "", active: false };
-  return snap.data() as { endDate: string; active: boolean };
-}
-
-export async function updateTrialSettings(data: { endDate: string; active: boolean }): Promise<void> {
-  await setDoc(doc(db, "settings", "trial"), data, { merge: true });
 }
 
 // ─── Statistics ────────────────────────────────────────────────
@@ -1368,7 +1133,7 @@ export const MAX_QUIZ_ATTEMPTS = 2;
  * `correctText`; the new shape uses stable per-option ids and optional
  * question/option images. Reading-side migration keeps old quizzes working.
  */
-export function normalizeQuiz(quiz: Quiz): Quiz {
+function normalizeQuiz(quiz: Quiz): Quiz {
   const questions = (Array.isArray(quiz.questions) ? quiz.questions : []).map((raw) => {
     const legacy = raw as unknown as {
       text?: string;
@@ -1460,17 +1225,6 @@ export function subscribeQuizResults(
   const q = query(collection(db, "quizResults"), where("subjectId", "==", subjectId));
   return onSnapshot(
     q,
-    (snapshot) => onData(snapshot.docs.map(quizResultFromDoc)),
-    (err) => onError?.(err)
-  );
-}
-
-export function subscribeAllQuizResults(
-  onData: (items: QuizResult[]) => void,
-  onError?: (err: unknown) => void
-): () => void {
-  return onSnapshot(
-    collection(db, "quizResults"),
     (snapshot) => onData(snapshot.docs.map(quizResultFromDoc)),
     (err) => onError?.(err)
   );
@@ -1724,19 +1478,6 @@ export function subscribeAllMaterialQuizzes(
   );
 }
 
-export function subscribeMaterialQuizResults(
-  subjectId: string,
-  onData: (items: QuizResult[]) => void,
-  onError?: (err: unknown) => void
-): () => void {
-  const q = query(collection(db, "materialQuizResults"), where("subjectId", "==", subjectId));
-  return onSnapshot(
-    q,
-    (snapshot) => onData(snapshot.docs.map(quizResultFromDoc)),
-    (err) => onError?.(err)
-  );
-}
-
 export function subscribeAllMaterialQuizResults(
   onData: (items: QuizResult[]) => void,
   onError?: (err: unknown) => void
@@ -1855,7 +1596,7 @@ export async function deleteMaterialQuizResult(resultId: string): Promise<void> 
 // One doc per student + quiz (id `${quizId}_${username}`) so the mark follows
 // the account across devices and is visible to the teacher in the admin panel.
 
-export function materialQuizDoneFromDoc(d: DocumentSnapshot): MaterialQuizDone {
+function materialQuizDoneFromDoc(d: DocumentSnapshot): MaterialQuizDone {
   const data = d.data()!;
   return {
     id: d.id,

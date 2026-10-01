@@ -135,11 +135,6 @@ export interface MaterialQuizDone {
   updatedAt: string;
 }
 
-export interface UserProgress {
-  userId: string;
-  completedItems: string[];
-}
-
 export interface DeviceInfo {
   deviceId: string;
   deviceName: string;
@@ -157,13 +152,6 @@ export interface Student {
   enrolledSubjects: string[];
   devices: DeviceInfo[];
   createdAt: string;
-}
-
-export interface StudentFormData {
-  username: string;
-  password: string;
-  displayName: string;
-  enrolledSubjects: string[];
 }
 
 export interface Admin {
@@ -197,13 +185,6 @@ export interface VideoStats {
   views: number;          // number of times play was started
   watchSeconds: number;   // cumulative watch time
   lastViewedAt: string;
-}
-
-export interface VisitorSession {
-  deviceId: string;
-  firstSeen: string;
-  lastSeen: string;
-  visits: number;
 }
 
 export interface StatsData {

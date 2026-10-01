@@ -101,6 +101,10 @@ import {
 } from "@/lib/materialQuizStats";
 import { findDuplicateUsername, normalizeSecretCode } from "@/lib/studentForm";
 
+const TICKER_TEXT_COLORS = ["#FFD700", "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#FF8C00", "#00CED1", "#FF1493"];
+const TICKER_BG_COLORS = ["#1a1a2e", "#16213e", "#0f3460", "#2d2d2d", "#1a1a1a", "#0d0d0d", "#2c1810", "#1e3a5f", "#2d1b69"];
+const TICKER_FONT_SIZES = ["12px", "14px", "16px", "18px", "20px", "24px", "28px", "32px"];
+
 // Students' self-marked quiz completion, shown in the students table.
 function DoneProgressCell({ done, total }: { done: number; total: number }) {
   if (total === 0) return <span className="text-xs text-muted-foreground">—</span>;
@@ -1042,7 +1046,7 @@ export default function AdminPage() {
                         <div>
                           <Label>لون النص</Label>
                           <div className="flex flex-wrap gap-2 mt-2">
-                            {["#FFD700", "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#FF8C00", "#00CED1", "#FF1493"].map((c) => (
+                            {TICKER_TEXT_COLORS.map((c) => (
                               <button
                                 key={c}
                                 type="button"
@@ -1058,7 +1062,7 @@ export default function AdminPage() {
                         <div>
                           <Label>لون الخلفية</Label>
                           <div className="flex flex-wrap gap-2 mt-2">
-                            {["#1a1a2e", "#16213e", "#0f3460", "#2d2d2d", "#1a1a1a", "#0d0d0d", "#2c1810", "#1a1a2e", "#1e3a5f", "#2d1b69"].map((c) => (
+                            {TICKER_BG_COLORS.map((c) => (
                               <button
                                 key={c}
                                 type="button"
@@ -1079,7 +1083,7 @@ export default function AdminPage() {
                             className="mt-2 flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             dir="rtl"
                           >
-                            {["12px","14px","16px","18px","20px","24px","28px","32px"].map((s) => (
+                            {TICKER_FONT_SIZES.map((s) => (
                               <option key={s} value={s}>{s}</option>
                             ))}
                           </select>
@@ -1442,7 +1446,8 @@ export default function AdminPage() {
                                               موقوف
                                             </span>
                                           )}
-                                        </TableCell>                                        <TableCell>
+                                        </TableCell>
+                                        <TableCell>
                                           <div className="flex items-center gap-2">
                                             <Button
                                               size="sm"
@@ -1686,7 +1691,7 @@ export default function AdminPage() {
                     <div>
                       <Label>لون النص</Label>
                       <div className="flex flex-wrap gap-2 mt-2">
-                        {["#FFD700", "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#FF8C00", "#00CED1", "#FF1493"].map((c) => (
+                        {TICKER_TEXT_COLORS.map((c) => (
                           <button
                             key={c}
                             type="button"
@@ -1702,7 +1707,7 @@ export default function AdminPage() {
                     <div>
                       <Label>لون الخلفية</Label>
                       <div className="flex flex-wrap gap-2 mt-2">
-                        {["#1a1a2e", "#16213e", "#0f3460", "#2d2d2d", "#1a1a1a", "#0d0d0d", "#2c1810", "#1a1a2e", "#1e3a5f", "#2d1b69"].map((c) => (
+                        {TICKER_BG_COLORS.map((c) => (
                           <button
                             key={c}
                             type="button"
@@ -1723,7 +1728,7 @@ export default function AdminPage() {
                         className="mt-2 flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         dir="rtl"
                       >
-                        {["12px","14px","16px","18px","20px","24px","28px","32px"].map((s) => (
+                        {TICKER_FONT_SIZES.map((s) => (
                           <option key={s} value={s}>{s}</option>
                         ))}
                       </select>
@@ -1855,7 +1860,7 @@ export default function AdminPage() {
                       now >= new Date(subject.challengeStartDate).getTime());
                   const ended =
                     active && subject.challengeEndDate && now >= new Date(subject.challengeEndDate).getTime();
-let status: { label: string; cls: string } = { label: "غير مفعّل", cls: "bg-gray-500/90" };
+                  let status: { label: string; cls: string } = { label: "غير مفعّل", cls: "bg-gray-500/90" };
                   if (active && !started) status = { label: "مجدول", cls: "bg-amber-500/90" };
                   else if (active && started && !ended) status = { label: "نشط", cls: "bg-green-500/90" };
                   else if (active && ended) status = { label: "منتهي", cls: "bg-red-500/90" };

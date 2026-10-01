@@ -2118,7 +2118,6 @@ function VideoCard({
                   title="تعديل الفيديو"
                   onClick={(e) => {
                     e.stopPropagation();
-                    console.log("Edit video clicked:", video.id);
                     onEdit?.(video);
                   }}
                 >
