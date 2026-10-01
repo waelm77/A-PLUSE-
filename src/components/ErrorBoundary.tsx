@@ -24,7 +24,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (this.state.error) {
       return (
         <div
-          className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 py-12 text-center"
+          className="flex min-h-dvh flex-col items-center justify-center gap-4 px-6 py-12 text-center"
           dir="rtl"
           style={{ background: "#111522", color: "#f3f6fb" }}
         >

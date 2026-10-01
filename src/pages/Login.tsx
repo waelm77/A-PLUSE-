@@ -42,9 +42,10 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background bg-grid p-4">
+    <div className="min-h-dvh flex items-center justify-center bg-background bg-grid p-4">
       <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent" />
       <Card className="w-full max-w-md relative glass border-none">
+        <main>
         <CardHeader className="text-center">
           <CardTitle className="text-3xl font-black">
             <span className="text-gradient">تسجيل الدخول</span>
@@ -86,6 +87,7 @@ export default function Login() {
             <p className="text-xs text-muted-foreground text-center mb-3">دخول الأدمن فقط</p>
           </div>
         </CardContent>
+      </main>
       </Card>
     </div>
   );

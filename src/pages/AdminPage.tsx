@@ -950,7 +950,7 @@ export default function AdminPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-dvh flex items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
     );
@@ -961,10 +961,10 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background bg-grid">
+    <div className="min-h-dvh bg-background bg-grid">
       <Navbar />
 
-      <div className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8">
         <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-black">
@@ -1090,11 +1090,13 @@ export default function AdminPage() {
                       </div>
                       <div>
                         <Label>اللون</Label>
-                        <div className="flex flex-wrap gap-2 mt-2">
+                        <div role="group" aria-label="اللون" className="flex flex-wrap gap-2 mt-2">
                           {COLORS.map((c) => (
                             <button
                               key={c}
                               type="button"
+                              aria-label={`اللون ${c}`}
+                              aria-pressed={form.color === c}
                               onClick={() => setForm({ ...form, color: c })}
                               className={`h-8 w-8 rounded-full border-2 transition-all ${
                                 form.color === c ? "border-black scale-110" : "border-transparent"
@@ -1106,7 +1108,7 @@ export default function AdminPage() {
                       </div>
                       <div>
                         <Label>الأيقونة</Label>
-                        <div className="flex flex-wrap gap-2 mt-2">
+                        <div role="group" aria-label="الأيقونة" className="flex flex-wrap gap-2 mt-2">
                           {AVAILABLE_ICONS.map(({ name, icon: Icon }) => (
                             <button
                               key={name}
@@ -1127,8 +1129,8 @@ export default function AdminPage() {
                       <div className="rounded-lg border p-3 space-y-3">
                         <p className="text-sm font-medium">الشريط المتحرك للمادة</p>
                         <div>
-                          <Label>نص الشريط</Label>
-                          <Input
+                          <Label htmlFor="ticker-text">نص الشريط</Label>
+                          <Input id="ticker-text"
                             value={form.tickerText}
                             onChange={(e) => setForm({ ...form, tickerText: e.target.value })}
                             placeholder="نص يظهر في شريط متحرك عند فتح المادة"
@@ -1137,11 +1139,13 @@ export default function AdminPage() {
                         </div>
                         <div>
                           <Label>لون النص</Label>
-                          <div className="flex flex-wrap gap-2 mt-2">
+                          <div role="group" aria-label="لون النص" className="flex flex-wrap gap-2 mt-2">
                             {TICKER_TEXT_COLORS.map((c) => (
                               <button
                                 key={c}
                                 type="button"
+                                aria-label={`اللون ${c}`}
+                                aria-pressed={form.tickerColor === c}
                                 onClick={() => setForm({ ...form, tickerColor: c })}
                                 className={`h-8 w-8 rounded-full border-2 transition-all ${
                                   form.tickerColor === c ? "border-black scale-110" : "border-transparent"
@@ -1153,11 +1157,13 @@ export default function AdminPage() {
                         </div>
                         <div>
                           <Label>لون الخلفية</Label>
-                          <div className="flex flex-wrap gap-2 mt-2">
+                          <div role="group" aria-label="لون الخلفية" className="flex flex-wrap gap-2 mt-2">
                             {TICKER_BG_COLORS.map((c) => (
                               <button
                                 key={c}
                                 type="button"
+                                aria-label={`اللون ${c}`}
+                                aria-pressed={form.tickerBgColor === c}
                                 onClick={() => setForm({ ...form, tickerBgColor: c })}
                                 className={`h-8 w-8 rounded-full border-2 transition-all ${
                                   form.tickerBgColor === c ? "border-white scale-110" : "border-transparent"
@@ -1220,8 +1226,8 @@ export default function AdminPage() {
                         {form.countdownActive && (
                           <>
                             <div>
-                              <Label>النص المعروض فوق العداد</Label>
-                              <Input
+                              <Label htmlFor="countdown-title">النص المعروض فوق العداد</Label>
+                              <Input id="countdown-title"
                                 value={form.countdownTitle}
                                 onChange={(e) => setForm({ ...form, countdownTitle: e.target.value })}
                                 placeholder="مثال: الفترة التجريبية تنتهي خلال / موعد الاختبار"
@@ -1761,11 +1767,13 @@ export default function AdminPage() {
                     </div>
                     <div>
                       <Label>لون النص</Label>
-                      <div className="flex flex-wrap gap-2 mt-2">
+                      <div role="group" aria-label="لون النص" className="flex flex-wrap gap-2 mt-2">
                         {TICKER_TEXT_COLORS.map((c) => (
                           <button
                             key={c}
                             type="button"
+                            aria-label={`اللون ${c}`}
+                            aria-pressed={ticker.color === c}
                             onClick={() => setTicker({ ...ticker, color: c })}
                             className={`h-8 w-8 rounded-full border-2 transition-all ${
                               ticker.color === c ? "border-black scale-110" : "border-transparent"
@@ -1777,11 +1785,13 @@ export default function AdminPage() {
                     </div>
                     <div>
                       <Label>لون الخلفية</Label>
-                      <div className="flex flex-wrap gap-2 mt-2">
+                      <div role="group" aria-label="لون الخلفية" className="flex flex-wrap gap-2 mt-2">
                         {TICKER_BG_COLORS.map((c) => (
                           <button
                             key={c}
                             type="button"
+                            aria-label={`اللون ${c}`}
+                            aria-pressed={ticker.bgColor === c}
                             onClick={() => setTicker({ ...ticker, bgColor: c })}
                             className={`h-8 w-8 rounded-full border-2 transition-all ${
                               ticker.bgColor === c ? "border-white scale-110" : "border-transparent"
@@ -2014,8 +2024,8 @@ export default function AdminPage() {
                         </div>
 
                         <div>
-                          <Label>عنوان التحدي</Label>
-                          <Input
+                          <Label htmlFor="arena-title">عنوان التحدي</Label>
+                          <Input id="arena-title"
                             value={arenaTitle}
                             onChange={(e) => setArenaTitle(e.target.value)}
                             placeholder="مثال: ساحة التحدي الأسبوعي"
@@ -2487,7 +2497,7 @@ export default function AdminPage() {
             )}
           </TabsContent>
         </Tabs>
-      </div>
+      </main>
 
       {/* ════ Add / Edit Student Dialog ════ */}
       <Dialog open={studentDialogOpen} onOpenChange={setStudentDialogOpen}>
@@ -2696,8 +2706,8 @@ export default function AdminPage() {
           </DialogHeader>
           <form onSubmit={handleAdminSubmit} className="space-y-4 mt-4">
             <div>
-              <Label>الاسم</Label>
-              <Input
+              <Label htmlFor="admin-name">الاسم</Label>
+              <Input id="admin-name"
                 value={adminForm.name}
                 onChange={(e) => setAdminForm({ ...adminForm, name: e.target.value })}
                 placeholder="اسم المشرف"
@@ -2705,8 +2715,8 @@ export default function AdminPage() {
               />
             </div>
             <div>
-              <Label>البريد الإلكتروني</Label>
-              <Input
+              <Label htmlFor="admin-email">البريد الإلكتروني</Label>
+              <Input id="admin-email"
                 type="email"
                 value={adminForm.email}
                 onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })}

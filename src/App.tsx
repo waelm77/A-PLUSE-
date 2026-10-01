@@ -12,7 +12,7 @@ const NotFound = lazy(() => import('./pages/NotFound'))
 
 function PageLoader() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <div className="flex min-h-dvh items-center justify-center bg-background">
       <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
     </div>
   )

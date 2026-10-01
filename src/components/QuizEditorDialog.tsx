@@ -301,8 +301,8 @@ export default function QuizEditorDialog({
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label>عنوان الاختبار</Label>
-            <Input
+            <Label htmlFor="q-title">عنوان الاختبار</Label>
+            <Input id="q-title"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
               placeholder="مثال: اختبار الفصل الأول"
@@ -310,8 +310,8 @@ export default function QuizEditorDialog({
             />
           </div>
           <div>
-            <Label>وصف (اختياري)</Label>
-            <Input
+            <Label htmlFor="q-desc">وصف (اختياري)</Label>
+            <Input id="q-desc"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               placeholder="وصف قصير"

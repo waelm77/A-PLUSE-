@@ -150,6 +150,29 @@
     direction: rtl;
     font-family: 'Cairo', sans-serif;
   }
+
+  /* No rule hid the browser outline, but its default is easy to miss against the
+     dark surfaces here. Give keyboard focus a visible ring without showing it on
+     mouse clicks. */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+/* Motion here is decorative (pulsing dots, 3D card tilts, glow borders). Users who
+   ask the OS for reduced motion get none of it, so nothing decorative can trigger
+   vertigo or distract from the content. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @keyframes float {

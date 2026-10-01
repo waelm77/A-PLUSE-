@@ -928,7 +928,7 @@ export default function SubjectPage() {
 
   if (loading && id) {
     return (
-      <div className="min-h-screen bg-white">
+      <div className="min-h-dvh bg-white">
         <Navbar />
         <div className="container mx-auto px-4 py-20 text-center">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" style={{ borderColor: `hsl(var(--primary))`, borderTopColor: 'transparent' }} />
@@ -939,7 +939,7 @@ export default function SubjectPage() {
 
   if (!subject || (subject.isHidden && !isAdmin)) {
     return (
-      <div className="min-h-screen bg-white">
+      <div className="min-h-dvh bg-white">
         <Navbar />
         <div className="container mx-auto px-4 py-20 text-center">
           <h1 className="text-2xl font-bold mb-4">المادة غير موجودة</h1>
@@ -959,9 +959,10 @@ export default function SubjectPage() {
   const showSharedChallenge = !!subject.shareChallengePractice && !challengeRunning;
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-dvh bg-white">
       <Navbar />
 
+      <main>
       {/* Header */}
       <div
         className="relative overflow-hidden px-4 py-12"
@@ -1230,8 +1231,8 @@ export default function SubjectPage() {
                     </DialogHeader>
                     <form onSubmit={handleFileSubmit} className="space-y-4 mt-4">
                       <div>
-                        <Label>العنوان</Label>
-                        <Input
+                        <Label htmlFor="file-title">العنوان</Label>
+                        <Input id="file-title"
                           value={fileForm.title}
                           onChange={(e) => setFileForm({ ...fileForm, title: e.target.value })}
                           placeholder="عنوان الملف"
@@ -1239,8 +1240,8 @@ export default function SubjectPage() {
                         />
                       </div>
                       <div>
-                        <Label>رابط الملف</Label>
-                        <Input
+                        <Label htmlFor="file-url">رابط الملف</Label>
+                        <Input id="file-url"
                           value={fileForm.downloadUrl}
                           onChange={(e) => setFileForm({ ...fileForm, downloadUrl: e.target.value })}
                           placeholder="رابط مباشر للملف (PDF)"
@@ -1457,8 +1458,8 @@ export default function SubjectPage() {
                       </DialogHeader>
                       <form onSubmit={handleAssessmentSubmit} className="space-y-4 mt-4">
                         <div>
-                          <Label>عنوان الاختبار</Label>
-                          <Input
+                          <Label htmlFor="assessment-title">عنوان الاختبار</Label>
+                          <Input id="assessment-title"
                             value={assessmentForm.title}
                             onChange={(e) => setAssessmentForm({ ...assessmentForm, title: e.target.value })}
                             placeholder="مثال: اختبار الكيمياء - الفصل الأول"
@@ -1466,8 +1467,8 @@ export default function SubjectPage() {
                           />
                         </div>
                         <div>
-                          <Label>رابط الاختبار (Google Forms / Microsoft Forms)</Label>
-                          <Input
+                          <Label htmlFor="assessment-url">رابط الاختبار (Google Forms / Microsoft Forms)</Label>
+                          <Input id="assessment-url"
                             value={assessmentForm.url}
                             onChange={(e) => setAssessmentForm({ ...assessmentForm, url: e.target.value })}
                             placeholder="أدخل رابط الاختبار هنا"
@@ -1621,6 +1622,10 @@ export default function SubjectPage() {
         />
       )}
 
+      {/* Dialogs are portalled to the body, so closing <main> before them keeps
+          the landmark scoped to the page content itself. */}
+      </main>
+
       {/* Shared Video Dialog for all tabs */}
       <Dialog open={videoOpen} onOpenChange={(o) => { if (!o) { setEditingVideo(null); } setVideoOpen(o); }}>
         <DialogContent className="max-w-md" dir="rtl" aria-describedby={undefined}>
@@ -1632,8 +1637,8 @@ export default function SubjectPage() {
           </DialogHeader>
           <form onSubmit={handleVideoSubmit} className="space-y-4 mt-4">
             <div>
-              <Label>العنوان</Label>
-              <Input
+              <Label htmlFor="video-title">العنوان</Label>
+              <Input id="video-title"
                 value={videoForm.title}
                 onChange={(e) => setVideoForm({ ...videoForm, title: e.target.value })}
                 placeholder="عنوان الفيديو"
@@ -1659,8 +1664,8 @@ export default function SubjectPage() {
               </Select>
             </div>
             <div>
-              <Label>الرابط</Label>
-              <Input
+              <Label htmlFor="video-url">الرابط</Label>
+              <Input id="video-url"
                 value={videoForm.url}
                 onChange={(e) => setVideoForm({ ...videoForm, url: e.target.value })}
                 placeholder="رابط الفيديو"
@@ -1716,11 +1721,13 @@ export default function SubjectPage() {
             </div>
             <div>
               <Label>اللون المميز</Label>
-              <div className="flex flex-wrap gap-2 mt-2">
+              <div role="group" aria-label="اللون المميز" className="flex flex-wrap gap-2 mt-2">
                 {VIDEO_COLORS.map((c) => (
                   <button
                     key={c}
                     type="button"
+                    aria-label={`اللون ${c}`}
+                    aria-pressed={videoForm.color === c}
                     onClick={() => setVideoForm({ ...videoForm, color: c })}
                     className={`h-8 w-8 rounded-full border-2 transition-all ${
                       videoForm.color === c ? "border-black scale-110" : "border-transparent"
@@ -2070,6 +2077,8 @@ function VideoCard({
           </div>
           <button
             onClick={() => onToggleComplete(video.id)}
+            aria-pressed={isCompleted}
+            aria-label={isCompleted ? "تم تعليم الفيديو كمنجز — اضغط لإلغاء" : "تعليم الفيديو كمنجز"}
             className="transition-colors"
             style={{ color: isCompleted ? color : "currentColor" }}
           >
@@ -2189,6 +2198,8 @@ function VideoCard({
               }}
               className="transition-colors"
               style={{ color: isCompleted ? color : "currentColor" }}
+              aria-pressed={isCompleted}
+              aria-label={isCompleted ? "تم تعليم الفيديو كمنجز — اضغط لإلغاء" : "تعليم الفيديو كمنجز"}
             >
               {isCompleted ? <CheckCircle2 className="h-6 w-6" /> : <Circle className="h-6 w-6 text-muted-foreground" />}
             </button>
@@ -2238,6 +2249,8 @@ function FileCard({
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <button
             onClick={() => onToggleComplete(file.id)}
+            aria-pressed={isCompleted}
+            aria-label={isCompleted ? "تم تعليم ملف كمنجز — اضغط لإلغاء" : "تعليم ملف كمنجز"}
             className="transition-colors shrink-0"
             style={{ color: isCompleted ? color : "currentColor" }}
           >
@@ -2398,6 +2411,8 @@ function AssessmentCard({
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <button
             onClick={() => onToggleComplete(assessment.id)}
+            aria-pressed={isCompleted}
+            aria-label={isCompleted ? "تم تعليم اختبار كمنجز — اضغط لإلغاء" : "تعليم اختبار كمنجز"}
             className="transition-colors shrink-0"
             style={{ color: isCompleted ? color : "currentColor" }}
           >

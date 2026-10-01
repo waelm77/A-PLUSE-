@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, MessageCircle, Send } from "lucide-react";
+import { Plus, MessageCircle, Send, ChevronUp, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 import { subscribeSubjects, createSubject, trackVisit, getDeviceId, getVisibleSubjects, reorderSubjects } from "@/services/firestore";
 import { AVAILABLE_ICONS, COLORS } from "@/lib/constants";
@@ -115,6 +115,20 @@ export default function Home() {
     }
   };
 
+  // Single place that persists an order, shared by drag-and-drop and the up/down
+  // buttons, so both paths cannot drift apart.
+  const commitOrder = (next: Subject[]) => {
+    setSubjects(next);
+    try {
+      localStorage.setItem("a-plus-subjects", JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+    reorderSubjects(next.map((s) => s.id))
+      .then(() => toast.success("تم حفظ ترتيب المواد"))
+      .catch((err) => toast.error(errorMessage(err, "تعذّر حفظ الترتيب")));
+  };
+
   const handleDragStart = (id: string) => {
     if (!isAdmin) return;
     setDragId(id);
@@ -134,23 +148,29 @@ export default function Home() {
     const next = [...subjects];
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
-    setSubjects(next);
-    try {
-      localStorage.setItem("a-plus-subjects", JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
-    const orderedIds = next.map((s) => s.id);
-    reorderSubjects(orderedIds)
-      .then(() => toast.success("تم حفظ ترتيب المواد"))
-      .catch(() => toast.error("حدث خطأ في حفظ الترتيب"));
+    commitOrder(next);
     setDragId(null);
   };
 
+  /**
+   * Keyboard- and screen-reader-accessible counterpart to dragging. Drag-and-drop
+   * has neither, so without these buttons an admin who cannot drag cannot reorder.
+   */
+  const moveSubject = (id: string, delta: -1 | 1) => {
+    const from = subjects.findIndex((s) => s.id === id);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= subjects.length) return;
+    const next = [...subjects];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    commitOrder(next);
+  };
+
   return (
-    <div className="min-h-screen bg-background bg-grid">
+    <div className="min-h-dvh bg-background bg-grid">
       <Navbar />
 
+      <main>
       {/* Hero */}
       <section className="relative overflow-hidden px-4 py-20 text-center">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/5 to-transparent" />
@@ -220,11 +240,13 @@ export default function Home() {
                   </div>
                   <div>
                     <Label>اللون</Label>
-                    <div className="flex flex-wrap gap-2 mt-2">
+                    <div role="group" aria-label="اللون" className="flex flex-wrap gap-2 mt-2">
                       {COLORS.map((c) => (
                         <button
                           key={c}
                           type="button"
+                          aria-label={`اللون ${c}`}
+                          aria-pressed={form.color === c}
                           onClick={() => setForm({ ...form, color: c })}
                           className={`h-8 w-8 rounded-full border-2 transition-all ${
                             form.color === c ? "border-black scale-110" : "border-transparent"
@@ -236,7 +258,7 @@ export default function Home() {
                   </div>
                   <div>
                     <Label>الأيقونة</Label>
-                    <div className="flex flex-wrap gap-2 mt-2">
+                    <div role="group" aria-label="الأيقونة" className="flex flex-wrap gap-2 mt-2">
                       {AVAILABLE_ICONS.map(({ name, icon: Icon }) => (
                         <button
                           key={name}
@@ -274,7 +296,7 @@ export default function Home() {
           </div>
         ) : subjects.length > 0 ? (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {subjects.map((subject) => (
+            {subjects.map((subject, index) => (
               <div
                 key={subject.id}
                 draggable={isAdmin}
@@ -283,9 +305,31 @@ export default function Home() {
                   if (isAdmin) e.preventDefault();
                 }}
                 onDrop={() => handleDrop(subject.id)}
-                className={isAdmin ? "cursor-grab active:cursor-grabbing" : ""}
+                className={`relative ${isAdmin ? "cursor-grab active:cursor-grabbing" : ""}`}
               >
                 <SubjectCard subject={subject} />
+                {isAdmin && (
+                  <div className="absolute top-2 left-2 z-20 flex flex-col gap-1">
+                    <button
+                      type="button"
+                      onClick={() => moveSubject(subject.id, -1)}
+                      disabled={index === 0}
+                      aria-label={`نقل «${subject.name}» للأعلى`}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-background/85 text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveSubject(subject.id, 1)}
+                      disabled={index === subjects.length - 1}
+                      aria-label={`نقل «${subject.name}» للأسفل`}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-background/85 text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -297,6 +341,7 @@ export default function Home() {
           </div>
         )}
       </section>
+      </main>
 
       <footer className="border-t border-border/50 py-8 text-center text-sm text-muted-foreground">
         <div className="mb-6 flex flex-col items-center gap-4">
