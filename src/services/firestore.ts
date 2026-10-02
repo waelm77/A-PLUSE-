@@ -20,6 +20,7 @@ import {
 } from "firebase/firestore";
 import type { DocumentSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { normalizeSecretCode, normalizeUsername, usernameKey } from "../lib/studentForm";
 import type { Subject, Video, FileItem, Assessment, Student, DeviceInfo, Ticker, Admin, DailyVisit, VideoStats, Quiz, QuizOption, QuizResult, StudentMedals, Medal, MaterialQuizDone } from "../types";
 
 function generateId(): string {
@@ -465,26 +466,41 @@ export async function createStudent(data: {
   displayName: string;
   enrolledSubjects: string[];
 }): Promise<Student> {
-  const ref = await addDoc(collection(db, "students"), {
+  // Normalise the same way normalizeSecretCode already normalised the password:
+  // the exact-match login lookup can only ever find what was stored cleanly.
+  const payload = {
     ...data,
+    username: normalizeUsername(data.username),
+    password: normalizeSecretCode(data.password),
     isActive: true,
     devices: [],
+  };
+  const ref = await addDoc(collection(db, "students"), {
+    ...payload,
     createdAt: serverTimestamp(),
   });
   return {
+    ...payload,
     id: ref.id,
-    ...data,
-    isActive: true,
-    devices: [],
     createdAt: new Date().toISOString(),
-  };
+  } as Student;
 }
 
 export async function updateStudent(
   id: string,
-  data: { displayName?: string; password?: string; enrolledSubjects?: string[]; isActive?: boolean }
+  data: {
+    username?: string;
+    displayName?: string;
+    password?: string;
+    enrolledSubjects?: string[];
+    isActive?: boolean;
+  }
 ): Promise<void> {
-  await updateDoc(doc(db, "students", id), data);
+  await updateDoc(doc(db, "students", id), {
+    ...data,
+    ...(data.username !== undefined ? { username: normalizeUsername(data.username) } : {}),
+    ...(data.password !== undefined ? { password: normalizeSecretCode(data.password) } : {}),
+  });
 }
 
 export async function deleteStudent(id: string): Promise<void> {
@@ -492,13 +508,38 @@ export async function deleteStudent(id: string): Promise<void> {
   await assertDeleted("students", id);
 }
 
+function mapStudentDoc(d: DocumentSnapshot): Student {
+  const data = d.data() ?? {};
+  return {
+    id: d.id,
+    ...data,
+    createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+  } as Student;
+}
+
+/**
+ * Fast path is the exact match, which is every account written after the
+ * username was normalised on the way in.
+ *
+ * The fallback exists for accounts that were not: they hold a stray space or a
+ * capital letter and an exact query can never reach them. Rather than migrating
+ * production data, compare the way findDuplicateUsername compares and let them
+ * sign in as they always meant to. This only runs after the fast path misses, so
+ * it costs a collection read for a student who is already locked out, and
+ * nothing at all for everyone else.
+ */
 async function getStudentByUsername(username: string): Promise<Student | null> {
-  const q = query(collection(db, "students"), where("username", "==", username));
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) return null;
-  const d = snapshot.docs[0];
-  const data = d.data();
-  return { id: d.id, ...data, createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString() } as Student;
+  const wanted = usernameKey(username);
+  if (!wanted) return null;
+
+  const exact = await getDocs(
+    query(collection(db, "students"), where("username", "==", normalizeUsername(username)))
+  );
+  if (!exact.empty) return mapStudentDoc(exact.docs[0]);
+
+  const all = await getDocs(collection(db, "students"));
+  const hit = all.docs.find((d) => usernameKey(d.data().username) === wanted);
+  return hit ? mapStudentDoc(hit) : null;
 }
 
 export async function verifyStudentCredentials(

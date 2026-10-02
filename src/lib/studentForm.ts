@@ -17,11 +17,11 @@ export function findDuplicateUsername<T extends UsernameCandidate>(
   username: string,
   editingStudentId?: string | null
 ): T | null {
-  const wanted = username.trim().toLowerCase();
+  const wanted = usernameKey(username);
   if (!wanted) return null;
   return (
     students.find(
-      (s) => s.id !== editingStudentId && s.username.trim().toLowerCase() === wanted
+      (s) => s.id !== editingStudentId && usernameKey(s.username) === wanted
     ) ?? null
   );
 }
@@ -32,4 +32,30 @@ export function findDuplicateUsername<T extends UsernameCandidate>(
  */
 export function normalizeSecretCode(value: string, maxLength = 15): string {
   return value.replace(/\s+/g, "").replace(/\D/g, "").slice(0, maxLength);
+}
+
+/**
+ * Usernames are the login key and the lookup is an exact Firestore match, so
+ * whatever is stored is what has to be typed. The password got
+ * normalizeSecretCode() while the username used to get no normalisation at all,
+ * which meant a stray space or capital letter was stored verbatim and quietly
+ * locked that student out with "اسم المستخدم غير صحيح" -- and because the field
+ * was disabled while editing, delete-and-recreate was the only way out.
+ *
+ * Trimming happens on the way in. Capitalisation is deliberately preserved:
+ * results are keyed by the username string (`${quizId}_${username}`), so
+ * lower-casing on write would orphan every result a returning student already
+ * had. Case is handled on read instead, see getStudentByUsername.
+ */
+export function normalizeUsername(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+/**
+ * Comparison key for usernames. Mirrors what findDuplicateUsername compares, so
+ * the duplicate check and the login lookup can never disagree about whether two
+ * names are the same.
+ */
+export function usernameKey(value: string | null | undefined): string {
+  return normalizeUsername(value ?? "").toLowerCase();
 }

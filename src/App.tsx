@@ -26,7 +26,12 @@ function ErrorBoundaryReset({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <>
-      <Toaster position="top-center" />
+      <Toaster
+        position="top-center"
+        // An error that vanishes in the default 4s is an error nobody reads: a
+        // failed save looked like it had worked. Errors linger, successes don't.
+        toastOptions={{ error: { duration: 9000 } }}
+      />
       <ConfirmDialogProvider>
         <Suspense fallback={<PageLoader />}>
           <ErrorBoundaryReset>

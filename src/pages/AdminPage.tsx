@@ -99,7 +99,7 @@ import {
   materialQuizSubjectRows,
   materialQuizBuckets,
 } from "@/lib/materialQuizStats";
-import { findDuplicateUsername, normalizeSecretCode } from "@/lib/studentForm";
+import { findDuplicateUsername, normalizeSecretCode, normalizeUsername } from "@/lib/studentForm";
 
 const TICKER_TEXT_COLORS = ["#FFD700", "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#FF8C00", "#00CED1", "#FF1493"];
 const TICKER_BG_COLORS = ["#1a1a2e", "#16213e", "#0f3460", "#2d2d2d", "#1a1a1a", "#0d0d0d", "#2c1810", "#1e3a5f", "#2d1b69"];
@@ -750,6 +750,12 @@ export default function AdminPage() {
     editingStudent?.id
   );
 
+  // Results and "finished" marks are keyed by the username string, not the document
+  // id, so renaming a student strands what they already did. Say so before saving.
+  const usernameChanged =
+    !!editingStudent &&
+    normalizeUsername(editingStudent.username) !== normalizeUsername(studentForm.username);
+
   const openEditStudent = (student: Student) => {
     setEditingStudent(student);
     setStudentForm({
@@ -766,8 +772,9 @@ export default function AdminPage() {
   const handleStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanPassword = normalizeSecretCode(studentForm.password);
+    const cleanUsername = normalizeUsername(studentForm.username);
     const missing: string[] = [];
-    if (!studentForm.username.trim()) missing.push("اسم المستخدم");
+    if (!cleanUsername) missing.push("اسم المستخدم");
     if (!cleanPassword && !editingStudent?.password) missing.push("كلمة السر");
     if (!studentForm.displayName.trim()) missing.push("اسم الطالب");
     if (studentForm.enrolledSubjects.length === 0) missing.push("المادة");
@@ -788,6 +795,7 @@ export default function AdminPage() {
     try {
       if (editingStudent) {
         const updates: Record<string, string | string[]> = {
+          username: normalizeUsername(studentForm.username),
           displayName: studentForm.displayName,
           enrolledSubjects: studentForm.enrolledSubjects,
         };
@@ -812,7 +820,8 @@ export default function AdminPage() {
   const handleDeleteStudent = async (id: string) => {
     if (!(await confirm({
       title: "حذف هذا الطالب؟",
-      description: "سيتم حذف حساب الطالب ونتائجه وإنجازاته.",
+      description:
+        "سيتم حذف الحساب وأجهزةه المسموح بها. النتائج والإنجازات تبقى مرتبطة باسم المستخدم ولا تُحذف، فإذا أضفت الطالب لاحقاً بنفس الاسم ستعود سجلاته. حذف سجلاته نهائياً يتطلب حذفها من تبويب التحليلات.",
       confirmLabel: "حذف الطالب",
       variant: "destructive",
     }))) return;
@@ -1260,8 +1269,14 @@ export default function AdminPage() {
                                     minute: "2-digit",
                                   })}
                                 </p>
-                              )}
-                            </div>
+)}
+              {usernameChanged && (
+                <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-600">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  تغيير الاسم يفصل النتائج والإنجازات السابقة، لأنها مرتبطة بالاسم لا بالحساب
+                </p>
+              )}
+            </div>
                           </>
                         )}
                       </div>
@@ -2513,7 +2528,6 @@ export default function AdminPage() {
                 value={studentForm.username}
                 onChange={(e) => setStudentForm({ ...studentForm, username: e.target.value })}
                 placeholder="مثال: ahmed_2026"
-                disabled={!!editingStudent}
                 aria-invalid={!!duplicateStudent}
               />
               {duplicateStudent && (
