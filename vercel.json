@@ -1,3 +1,9 @@
-{
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+﻿{
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "destination": "https://wael-educatinal-website.web.app/$1",
+      "permanent": true
+    }
+  ]
 }
