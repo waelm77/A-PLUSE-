@@ -1,0 +1,4 @@
+﻿Cloudinary
+- CLOUDINARY_CLOUD_NAME = dgaw8ggo
+- CLOUDINARY_UPLOAD_PRESET = ml_default
+API KEY (save for later): 945113998366399
