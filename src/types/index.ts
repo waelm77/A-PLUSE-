@@ -21,6 +21,7 @@ export interface Subject {
   challengeStartDate?: string;
   challengeEndDate?: string;
   shareChallengePractice?: boolean;
+  activeChallengeQuizId?: string;
   isHidden?: boolean;
 }
 
@@ -47,10 +48,12 @@ export interface FileItem {
   fileType: string;
   size?: string;
   downloadUrl: string;
+  storagePath?: string;
   downloads: number;
   isFree: boolean;
   canDownload?: boolean;
   canView?: boolean;
+  watermark?: boolean;
   createdAt: string;
   order?: number;
   isHidden?: boolean;

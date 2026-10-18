@@ -21,12 +21,12 @@ export default function SubjectCard({ subject }: SubjectCardProps) {
         }}
       >
         <div
-          className="absolute -top-1/2 -right-1/2 h-[200%] w-[200%] rounded-full opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+          className="hover-overlay absolute -top-1/2 -right-1/2 h-[200%] w-[200%] rounded-full opacity-0 transition-opacity duration-500 group-hover:opacity-100"
           style={{
             background: `radial-gradient(circle, ${subject.color}25 0%, transparent 70%)`,
           }}
         />
-        <div className="absolute inset-0 transition-all duration-500 opacity-0 group-hover:opacity-100" style={{ background: `linear-gradient(to top, ${subject.color}15, transparent)` }} />
+        <div className="hover-overlay absolute inset-0 transition-all duration-500 opacity-0 group-hover:opacity-100" style={{ background: `linear-gradient(to top, ${subject.color}15, transparent)` }} />
         <div className="relative z-10">
           <div
             className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-2xl shadow-lg icon-3d"

@@ -13,6 +13,8 @@ import {
   EyeOff,
   RefreshCw,
   Ghost,
+  Target,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/authStore";
@@ -31,6 +33,9 @@ import {
   deleteQuiz,
   toggleQuizFree,
   toggleQuizHidden,
+  copyQuizToMaterialQuiz,
+  updateSubject,
+  resetChallengeResults,
   MAX_QUIZ_ATTEMPTS,
 } from "@/services/firestore";
 import type { Subject, Quiz, QuizResult } from "@/types";
@@ -86,6 +91,7 @@ export default function ChallengeSection({
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [results, setResults] = useState<QuizResult[]>([]);
   const [medalCounts, setMedalCounts] = useState<Record<string, number>>({});
+  const [activeChallengeId, setActiveChallengeId] = useState(subject.activeChallengeQuizId);
 
   useEffect(() => subscribeQuizzesBySubject(subject.id, setQuizzes), [subject.id]);
   useEffect(() => subscribeQuizResults(subject.id, setResults), [subject.id]);
@@ -100,8 +106,13 @@ export default function ChallengeSection({
   );
 
   const visibleQuizzes = useMemo(
-    () => quizzes.filter((q) => isAdmin || !q.isHidden),
-    [quizzes, isAdmin]
+    () =>
+      quizzes.filter((q) =>
+        isAdmin
+          ? true
+          : !q.isHidden && !!activeChallengeId && q.id === activeChallengeId
+      ),
+    [quizzes, isAdmin, activeChallengeId]
   );
   const myResult = studentSession
     ? results.find((r) => r.username === studentSession.username)
@@ -232,22 +243,36 @@ export default function ChallengeSection({
                 const accessible = canAccessText(q);
                 const attemptsReached = (myResult?.attempts || 0) >= MAX_QUIZ_ATTEMPTS;
                 const done = myResult && myResult.score > 0;
+                const isActive = q.id === activeChallengeId;
                 return (
                   <div
                     key={q.id}
                     className="rounded-xl border bg-background/70 p-4 shadow-sm"
-                    style={{ borderColor: subject.color + "44" }}
+                    style={{
+                      borderColor: isActive ? subject.color : subject.color + "44",
+                      boxShadow: isActive ? `0 0 0 2px ${subject.color}55` : undefined,
+                    }}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <h3 className="font-bold text-lg flex items-center gap-2 min-w-0">
                         <Play className="h-4 w-4 shrink-0" style={{ color: subject.color }} />
                         <span className="truncate">{q.title}</span>
                       </h3>
-                      {q.isFree && !isAdmin && (
-                        <span className="rounded bg-green-500/90 px-1.5 py-0.5 text-[10px] text-white font-bold shrink-0">
-                          مجاني
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {isActive && (
+                          <span
+                            className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] text-white font-bold"
+                            style={{ backgroundColor: subject.color }}
+                          >
+                            <Target className="h-3 w-3" /> التحدي الحالي
+                          </span>
+                        )}
+                        {q.isFree && !isAdmin && (
+                          <span className="rounded bg-green-500/90 px-1.5 py-0.5 text-[10px] text-white font-bold">
+                            مجاني
+                          </span>
+                        )}
+                      </div>
                     </div>
                     {q.description && <p className="text-sm text-muted-foreground mt-1">{q.description}</p>}
                     <p className="text-xs text-muted-foreground mt-1">
@@ -298,6 +323,42 @@ export default function ChallengeSection({
                           <Pencil className="h-3.5 w-3.5" /> تعديل
                         </Button>
                         <Button
+                          variant={isActive ? "outline" : "ghost"}
+                          size="sm"
+                          className="gap-1 text-xs"
+                          style={isActive ? { borderColor: subject.color, color: subject.color } : undefined}
+                          onClick={async () => {
+                            const next = isActive ? "" : q.id;
+                            await updateSubject(subject.id, { activeChallengeQuizId: next });
+                            setActiveChallengeId(next);
+                            if (!isActive) {
+                              await resetChallengeResults(subject.id);
+                              toast.success("تم تعيين هذا الاختبار كالتحدي الحالي وإعادة تعيين لوحة الشرف");
+                            } else {
+                              toast.success("لم يعد هذا الاختبار هو التحدي الحالي");
+                            }
+                          }}
+                        >
+                          <Target className="h-3.5 w-3.5" />
+                          {isActive ? "إلغاء التحديد" : "تعيين كتحدي"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-1 text-xs"
+                          onClick={async () => {
+                            try {
+                              await copyQuizToMaterialQuiz(q.id);
+                              toast.success("تم نسخ الاختبار إلى الاختبارات التفاعلية");
+                            } catch (err) {
+                              console.error("Challenge quiz copy error:", err);
+                              toast.error(errorMessage(err, "فشل نسخ الاختبار"));
+                            }
+                          }}
+                        >
+                          <Copy className="h-3.5 w-3.5" /> نسخ
+                        </Button>
+                        <Button
                           variant="ghost"
                           size="sm"
                           className="gap-1 text-xs"
@@ -344,18 +405,41 @@ export default function ChallengeSection({
                 );
               })}
             </div>
-          ) : (
+          ) : isAdmin ? (
             <div className="mb-6 rounded-xl border border-dashed p-6 text-center text-muted-foreground">
               <Ghost className="h-8 w-8 mx-auto mb-2 opacity-40" />
               لا توجد اختبارات بعد{isAdmin ? " — اضغط «إدارة الاختبارات» لإضافة أول تحدٍّ" : ""}
             </div>
-          )}
+          ) : null}
 
           {/* Leaderboard */}
           <div className="rounded-xl bg-background/70 border p-4" style={{ borderColor: subject.color + "44" }}>
-            <div className="mb-3 flex items-center gap-2">
+            <div className="mb-3 flex items-center gap-2 flex-wrap">
               <RefreshCw className="h-4 w-4 text-muted-foreground" />
               <h3 className="text-lg font-black">{rankTitle}</h3>
+              {isAdmin && results.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 text-xs mr-auto"
+                  onClick={async () => {
+                    if (!(await confirm({
+                      title: "إعادة تعيين لوحة الشرف؟",
+                      description: "سيتم مسح جميع نتائج وأسماء طلاب هذا التحدي، وتبدأ لوحة الشرف من الصفر.",
+                      variant: "destructive",
+                    }))) return;
+                    try {
+                      await resetChallengeResults(subject.id);
+                      toast.success("تم إفراغ لوحة الشرف — تبدأ من جديد");
+                    } catch (err) {
+                      console.error("Challenge leaderboard reset error:", err);
+                      toast.error(errorMessage(err, "تعذّر إعادة تعيين لوحة الشرف"));
+                    }
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> إعادة تعيين لوحة الشرف
+                </Button>
+              )}
             </div>
             <ChallengeLeaderboard
               results={results}

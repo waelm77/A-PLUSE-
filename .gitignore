@@ -29,3 +29,5 @@ battery-report.html
 
 # Firebase cache
 .firebase/
+
+.vercel

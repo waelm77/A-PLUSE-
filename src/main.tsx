@@ -13,6 +13,8 @@ import '@/store/authStore'
 // Seed data synchronously before first render so subjects appear immediately
 import { seedSubjects } from '@/services/firestore'
 seedSubjects()
+const APP_BUILD = "v2026.10.18-cloudinary-watermark"
+console.log("%cAPP_BUILD=" + APP_BUILD, "color:#22c55e;font-weight:bold;font-size:14px")
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

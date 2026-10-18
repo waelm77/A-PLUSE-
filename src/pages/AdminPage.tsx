@@ -48,15 +48,16 @@ import {
   Timer,
   TrendingUp,
   Copy,
-  Sparkles,
   Trophy,
   ClipboardCheck,
   ChevronDown,
   Swords,
   Pencil,
+  Sparkles,
   Lock,
   Unlock,
   AlertCircle,
+  Target,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useTrialStore } from "@/store/trialStore";
@@ -88,6 +89,8 @@ import {
   deleteQuiz,
   toggleQuizFree,
   toggleQuizHidden,
+  copyQuizToMaterialQuiz,
+  resetChallengeResults,
   createMaterialQuiz,
   updateMaterialQuiz,
 } from "@/services/firestore";
@@ -242,6 +245,11 @@ export default function AdminPage() {
   const [arenaSaving, setArenaSaving] = useState(false);
   const [arenaQuizzes, setArenaQuizzes] = useState<Quiz[]>([]);
   const [arenaAddChoiceOpen, setArenaAddChoiceOpen] = useState(false);
+  const [arenaPickOpen, setArenaPickOpen] = useState(false);
+  const [arenaPickQuizzes, setArenaPickQuizzes] = useState<Quiz[]>([]);
+  // The subject whose challenge is being activated — the picker writes
+  // challengeActive + activeChallengeQuizId together once a quiz is chosen.
+  const [arenaPickSubject, setArenaPickSubject] = useState<Subject | null>(null);
   const [arenaQuizType, setArenaQuizType] = useState<"material" | "challenge">("challenge");
   const [arenaQuizOpen, setArenaQuizOpen] = useState(false);
   const [arenaEditingQuiz, setArenaEditingQuiz] = useState<Quiz | null>(null);
@@ -250,6 +258,11 @@ export default function AdminPage() {
     if (!arenaSubjectId) return;
     return subscribeQuizzesBySubject(arenaSubjectId, setArenaQuizzes);
   }, [arenaSubjectId]);
+
+  useEffect(() => {
+    if (!arenaPickSubject) return;
+    return subscribeQuizzesBySubject(arenaPickSubject.id, setArenaPickQuizzes);
+  }, [arenaPickSubject]);
 
   // The arena status badge only changes when a challenge window opens or closes.
   // The old 30s interval re-rendered the entire admin page — every tab, table row
@@ -278,11 +291,51 @@ export default function AdminPage() {
 
   const handleArenaToggleActive = async (subject: Subject) => {
     const next = !subject.challengeActive;
+    if (next) {
+      // Enabling the challenge always asks the admin to pick the single quiz
+      // that will be shown to students.
+      setArenaPickQuizzes([]);
+      setArenaPickSubject(subject);
+      setArenaPickOpen(true);
+      return;
+    }
     try {
-      await updateSubject(subject.id, { challengeActive: next });
-      toast.success(next ? "تم تفعيل التحدي في صفحة المادة" : "تم إيقاف التحدي في المادة");
+      await updateSubject(subject.id, { challengeActive: false });
+      await resetChallengeResults(subject.id);
+      toast.success("تم إيقاف التحدي في المادة وإفراغ لوحة الشرف");
     } catch (err) {
       toast.error(errorMessage(err, "حدث خطأ أثناء تغيير الحالة"));
+    }
+  };
+
+  const handleArenaPickQuiz = async (quizId: string) => {
+    if (!arenaPickSubject) return;
+    try {
+      await updateSubject(arenaPickSubject.id, {
+        challengeActive: true,
+        activeChallengeQuizId: quizId,
+      });
+      await resetChallengeResults(arenaPickSubject.id);
+      setArenaPickOpen(false);
+      setArenaPickSubject(null);
+      toast.success("تم تفعيل التحدي — سيظهر هذا الاختبار فقط في ساحة التحدي");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر تفعيل التحدي"));
+    }
+  };
+
+  const handleArenaResetLeaderboard = async () => {
+    if (!arenaSubjectId) return;
+    if (!(await confirm({
+      title: "إعادة تعيين لوحة الشرف؟",
+      description: "سيتم مسح جميع نتائج وأسماء طلاب هذا التحدي، وتبدأ لوحة الشرف من الصفر.",
+      variant: "destructive",
+    }))) return;
+    try {
+      await resetChallengeResults(arenaSubjectId);
+      toast.success("تم إفراغ لوحة الشرف — تبدأ من جديد");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر إعادة تعيين لوحة الشرف"));
     }
   };
 
@@ -2111,9 +2164,14 @@ export default function AdminPage() {
                           </div>
                         </div>
 
-                        <Button onClick={handleArenaSave} className="gap-2" disabled={arenaSaving}>
-                          {arenaSaving ? "جاري الحفظ..." : "حفظ إعدادات الساحة"}
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button onClick={handleArenaSave} className="gap-2" disabled={arenaSaving}>
+                            {arenaSaving ? "جاري الحفظ..." : "حفظ إعدادات الساحة"}
+                          </Button>
+                          <Button variant="outline" size="sm" className="gap-2 text-destructive" onClick={handleArenaResetLeaderboard}>
+                            <Trash2 className="h-4 w-4" /> إعادة تعيين لوحة الشرف
+                          </Button>
+                        </div>
 
                         <div className="rounded-lg border p-4 space-y-3">
                           <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -2130,76 +2188,123 @@ export default function AdminPage() {
                               لا توجد اختبارات تحدٍّ لهذه المادة بعد.
                             </p>
                           ) : (
-                            <div className="space-y-2">
+<div className="space-y-2">
                               {arenaQuizzes.map((q) => {
                                 const isFree = q.isFree ?? true;
                                 const isHidden = q.isHidden ?? false;
+                                const isActive = q.id === subject.activeChallengeQuizId;
                                 return (
                                   <div
                                     key={q.id}
-                                    className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2"
+                                    className={`rounded-lg border px-3 py-2 ${isActive ? "bg-primary/5" : ""}`}
+                                    style={isActive ? { borderColor: subject.color } : undefined}
                                   >
-                                    <div className="min-w-0">
-                                      <p className="font-medium truncate">{q.title}</p>
-                                      <p className="text-xs text-muted-foreground">
-                                        {q.questions.length} سؤال{isFree ? " • مجاني" : " • للمشتركين"}
-                                      </p>
-                                    </div>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className="p-2 h-auto"
-                                        title="تعديل"
-                                        onClick={() => {
-                                          setArenaEditingQuiz(q);
-                                          setArenaQuizType("challenge");
-                                          setArenaQuizOpen(true);
-                                        }}
-                                      >
-                                        <Pencil className="h-4 w-4" />
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className={`p-2 h-auto ${isFree ? "text-green-600 hover:bg-green-50" : "text-orange-600 hover:bg-orange-50"}`}
-                                        title={isFree ? "تحويل للمشتركين فقط" : "تحويل لمجاني"}
-                                        onClick={async () => {
-                                          await toggleQuizFree(q.id, !isFree);
-                                          toast.success(isFree ? "أصبح للمشتركين فقط" : "أصبح مجانياً");
-                                        }}
-                                      >
-                                        {isFree ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className={`p-2 h-auto ${isHidden ? "text-amber-600" : "text-muted-foreground hover:text-amber-600"}`}
-                                        title={isHidden ? "إظهار الاختبار" : "إخفاء الاختبار"}
-                                        onClick={async () => {
-                                          await toggleQuizHidden(q.id, !isHidden);
-                                          toast.success(isHidden ? "أصبح ظاهراً" : "أصبح مخفياً");
-                                        }}
-                                      >
-                                        {isHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="destructive"
-                                        className="p-2 h-auto"
-                                        title="حذف"
-                                        onClick={async () => {
-                                          if (!(await confirm({ title: "حذف هذا الاختبار؟", variant: "destructive" }))) return;
-                                          try {
-                                            await deleteQuiz(q.id);
-                                            toast.success("تم الحذف");
-                                          } catch (err) {
-                                            toast.error(errorMessage(err, "تعذّر حذف الاختبار"));
-                                          }
-                                        }}
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
+                                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <p className="font-medium truncate">{q.title}</p>
+                                          {isActive && (
+                                            <span
+                                              className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] text-white font-bold"
+                                              style={{ backgroundColor: subject.color }}
+                                            >
+                                              <Target className="h-3 w-3" /> التحدي الحالي
+                                            </span>
+                                          )}
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                          {q.questions.length} سؤال{isFree ? " • مجاني" : " • للمشتركين"}
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center gap-1 flex-wrap shrink-0">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="gap-1 text-xs"
+                                          onClick={() => {
+                                            setArenaEditingQuiz(q);
+                                            setArenaQuizType("challenge");
+                                            setArenaQuizOpen(true);
+                                          }}
+                                        >
+                                          <Pencil className="h-3.5 w-3.5" /> تعديل
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant={isActive ? "outline" : "ghost"}
+                                          className="gap-1 text-xs"
+                                          style={isActive ? { borderColor: subject.color, color: subject.color } : undefined}
+                                          onClick={async () => {
+                                            const next = isActive ? "" : q.id;
+                                            await updateSubject(subject.id, { activeChallengeQuizId: next });
+                                            if (!isActive) {
+                                              await resetChallengeResults(subject.id);
+                                              toast.success("تم تعيين هذا الاختبار كالتحدي الحالي وإعادة تعيين لوحة الشرف");
+                                            } else {
+                                              toast.success("لم يعد هذا الاختبار هو التحدي الحالي");
+                                            }
+                                          }}
+                                        >
+                                          <Target className="h-3.5 w-3.5" />
+                                          {isActive ? "إلغاء التحديد" : "تعيين كتحدي"}
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="gap-1 text-xs"
+                                          title="إضافة للاختبارات التفاعلية"
+                                          onClick={async () => {
+                                            try {
+                                              await copyQuizToMaterialQuiz(q.id);
+                                              toast.success("تم نسخ الاختبار إلى الاختبارات التفاعلية");
+                                            } catch (err) {
+                                              toast.error(errorMessage(err, "فشل نسخ الاختبار"));
+                                            }
+                                          }}
+                                        >
+                                          <Copy className="h-3.5 w-3.5" /> نسخ
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className={`gap-1 text-xs ${isFree ? "text-green-600 hover:bg-green-50" : "text-orange-600 hover:bg-orange-50"}`}
+                                          onClick={async () => {
+                                            await toggleQuizFree(q.id, !isFree);
+                                            toast.success(isFree ? "أصبح للمشتركين فقط" : "أصبح مجانياً");
+                                          }}
+                                        >
+                                          {isFree ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                                          {isFree ? "تقييد" : "مجاني"}
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className={`gap-1 text-xs ${isHidden ? "text-amber-600" : "text-muted-foreground hover:text-amber-600"}`}
+                                          onClick={async () => {
+                                            await toggleQuizHidden(q.id, !isHidden);
+                                            toast.success(isHidden ? "أصبح ظاهراً" : "أصبح مخفياً");
+                                          }}
+                                        >
+                                          {isHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                          {isHidden ? "إظهار" : "إخفاء"}
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="destructive"
+                                          className="gap-1 text-xs"
+                                          onClick={async () => {
+                                            if (!(await confirm({ title: "حذف هذا الاختبار؟", variant: "destructive" }))) return;
+                                            try {
+                                              await deleteQuiz(q.id);
+                                              toast.success("تم الحذف");
+                                            } catch (err) {
+                                              toast.error(errorMessage(err, "تعذّر حذف الاختبار"));
+                                            }
+                                          }}
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" /> حذف
+                                        </Button>
+                                      </div>
                                     </div>
                                   </div>
                                 );
@@ -2774,6 +2879,45 @@ export default function AdminPage() {
               إرسال رابط التغيير
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ════ Arena: Pick the single active challenge quiz ════ */}
+      <Dialog open={arenaPickOpen} onOpenChange={(o) => { setArenaPickOpen(o); if (!o) setArenaPickSubject(null); }}>
+        <DialogContent className="max-w-md" dir="rtl" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>اختر اختبار التحدي</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            اختر اختباراً واحداً — هذا الاختبار فقط سيظهر للطلاب في ساحة التحدي.
+          </p>
+          <div className="mt-2 max-h-80 overflow-y-auto">
+            {arenaPickSubject && (() => {
+              const list = arenaPickQuizzes;
+              if (list.length === 0) {
+                return (
+                  <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+                    لا توجد اختبارات تحدٍّ لهذه المادة بعد. أضف اختباراً أولاً ثم فعّل التحدي.
+                  </p>
+                );
+              }
+              return (
+                <div className="grid gap-2">
+                  {list.map((q) => (
+                    <button
+                      key={q.id}
+                      type="button"
+                      onClick={() => handleArenaPickQuiz(q.id)}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 text-start transition hover:border-primary/50 hover:bg-primary/5"
+                    >
+                      <span className="font-bold truncate">{q.title}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{q.questions.length} سؤال</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -305,7 +305,7 @@ export default function Home() {
                   if (isAdmin) e.preventDefault();
                 }}
                 onDrop={() => handleDrop(subject.id)}
-                className={`relative ${isAdmin ? "cursor-grab active:cursor-grabbing" : ""}`}
+                className={`subject-cell relative ${isAdmin ? "cursor-grab active:cursor-grabbing" : ""}`}
               >
                 <SubjectCard subject={subject} />
                 {isAdmin && (

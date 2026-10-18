@@ -10,6 +10,7 @@ import {
   serverTimestamp,
   updateDoc,
   increment,
+  arrayUnion,
   setDoc,
   writeBatch,
   runTransaction,
@@ -305,6 +306,10 @@ export async function toggleFileViewStatus(id: string, canView: boolean): Promis
   await updateDoc(doc(db, "files", id), { canView });
 }
 
+export async function toggleFileWatermarkStatus(id: string, watermark: boolean): Promise<void> {
+  await updateDoc(doc(db, "files", id), { watermark });
+}
+
 export async function toggleAssessmentFreeStatus(id: string, isFree: boolean): Promise<void> {
   await updateDoc(doc(db, "assessments", id), { isFree });
 }
@@ -386,6 +391,7 @@ export async function createFile(data: Omit<FileItem, "id" | "createdAt" | "down
       isFree: data.isFree ?? true,
       canDownload: data.canDownload ?? true,
       canView: data.canView ?? true,
+      watermark: data.watermark ?? true,
       downloads: 0,
       createdAt: serverTimestamp(),
     });
@@ -403,9 +409,23 @@ export async function createFile(data: Omit<FileItem, "id" | "createdAt" | "down
   };
 }
 
-export async function deleteFile(id: string): Promise<void> {
+export async function deleteFile(id: string, storagePath?: string): Promise<void> {
   await deleteDoc(doc(db, "files", id));
   await assertDeleted("files", id);
+  if (storagePath) {
+    // Best-effort: the Firestore doc is already gone, a stuck Storage object
+    // must not make the delete look failed to the admin.
+    try {
+      const { deleteStorageObject } = await import("../services/storage");
+      await deleteStorageObject(storagePath);
+    } catch (err) {
+      console.error("Storage object delete error:", err);
+    }
+  }
+}
+
+export async function incrementFileDownloads(id: string): Promise<void> {
+  await updateDoc(doc(db, "files", id), { downloads: increment(1) });
 }
 
 // Assessments (Practice Tests)
@@ -716,16 +736,14 @@ export async function trackVisit(deviceId: string): Promise<void> {
 
     const key = todayKey();
     const ref = doc(db, "stats", `visit_${key}`);
-    const snap = await getDoc(ref);
-    const existing = snap.exists() ? (snap.data() as DailyVisit) : null;
-
-    const deviceIds = existing?.deviceIds?.includes(deviceId)
-      ? existing.deviceIds
-      : [...(existing?.deviceIds || []), deviceId];
 
     await setDoc(
       ref,
-      { date: key, deviceIds, pageviews: (existing?.pageviews || 0) + 1 },
+      {
+        date: key,
+        deviceIds: arrayUnion(deviceId),
+        pageviews: increment(1),
+      },
       { merge: true }
     );
   } catch (e) {
@@ -753,8 +771,6 @@ export async function trackVideoPlay(video: Video): Promise<void> {
     }
 
     const ref = doc(db, "stats", `video_${key}`);
-    const snap = await getDoc(ref);
-    const existing = snap.exists() ? (snap.data() as VideoStats) : null;
 
     await setDoc(
       ref,
@@ -762,8 +778,7 @@ export async function trackVideoPlay(video: Video): Promise<void> {
         videoId: video.id,
         subjectId: video.subjectId,
         title: video.title,
-        views: (existing?.views || 0) + 1,
-        watchSeconds: existing?.watchSeconds || 0,
+        views: increment(1),
         lastViewedAt: new Date().toISOString(),
       },
       { merge: true }
@@ -1159,6 +1174,50 @@ export async function submitQuizResult(input: {
   return { result: finalResult, attempt, saved: true };
 }
 
+/**
+ * Empties a subject's challenge leaderboard so a new challenge round starts
+ * from scratch: deletes every quizResult for the subject and rolls back the
+ * medal counters those results earned.
+ */
+export async function resetChallengeResults(subjectId: string): Promise<void> {
+  const snap = await getDocs(query(collection(db, "quizResults"), where("subjectId", "==", subjectId)));
+  const results = snap.docs.map(quizResultFromDoc);
+
+  const batch = writeBatch(db);
+  for (const d of snap.docs) batch.delete(d.ref);
+
+  // Roll back medal counters for students whose medal came from this subject.
+  const affected = new Map<string, { gold: number; silver: number; bronze: number }>();
+  for (const r of results) {
+    if (!r.medal) continue;
+    const current = affected.get(r.username) || { gold: 0, silver: 0, bronze: 0 };
+    current[r.medal] = current[r.medal] + 1;
+    affected.set(r.username, current);
+  }
+  if (affected.size > 0) {
+    const snaps = await Promise.all(
+      [...affected.keys()].map((u) => getDoc(doc(db, "studentMedals", u)))
+    );
+    snaps.forEach((s, i) => {
+      const username = [...affected.keys()][i];
+      const medal = affected.get(username)!;
+      const data = s.data();
+      const counts = {
+        gold: Math.max(0, (Number(data?.gold) || 0) - medal.gold),
+        silver: Math.max(0, (Number(data?.silver) || 0) - medal.silver),
+        bronze: Math.max(0, (Number(data?.bronze) || 0) - medal.bronze),
+      };
+      batch.set(
+        doc(db, "studentMedals", username),
+        { ...counts, totalMedals: counts.gold + counts.silver + counts.bronze },
+        { merge: true }
+      );
+    });
+  }
+
+  await batch.commit();
+}
+
 export async function createQuiz(data: Omit<Quiz, "id" | "createdAt">): Promise<Quiz> {
   const cleaned = deepClean({ ...data });
   const quizzesCol = collection(db, "quizzes");
@@ -1348,6 +1407,23 @@ export async function toggleMaterialQuizFree(id: string, isFree: boolean): Promi
 
 export async function toggleMaterialQuizHidden(id: string, isHidden: boolean): Promise<void> {
   await updateDoc(doc(db, "materialQuizzes", id), { isHidden });
+}
+
+export async function copyQuizToMaterialQuiz(quizId: string): Promise<Quiz> {
+  const snap = await getDoc(doc(db, "quizzes", quizId));
+  if (!snap.exists()) throw new Error("الاختبار غير موجود");
+  const quiz = normalizeQuiz({
+    id: snap.id,
+    ...snap.data(),
+    createdAt: snap.data()?.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+  } as Quiz);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { id, createdAt, ...rest } = quiz;
+  return createMaterialQuiz({
+    ...rest,
+    isFree: rest.isFree ?? true,
+    isHidden: rest.isHidden ?? false,
+  });
 }
 
 export async function deleteMaterialQuizResult(resultId: string): Promise<void> {

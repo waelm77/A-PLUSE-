@@ -171,6 +171,41 @@
   }
 }
 
+/* Subject grid: skip the paint work for cards that are nowhere near the viewport.
+
+   A card was four composited layers before any of it was seen -- two absolutely
+   positioned gradient overlays at 200% x 200%, a glow-border::before pseudo
+   element, and an icon carrying two drop-shadow filters plus a 3D transform.
+   `opacity-0` does not exempt any of it: it still gets painted. On a phone with
+   a long subject list that is the bulk of the cost, and the symptom is exactly
+   what was reported -- cards appearing late even though the icons themselves are
+   inline SVG with no network request at all.
+
+   content-visibility: auto lets the browser skip that work until the card is
+   close to being seen. `auto` on the intrinsic size makes it remember the real
+   height once measured, so the scrollbar does not jump as cards resolve. */
+.subject-cell {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 340px;
+}
+
+/* Touch devices never enter the :hover state that all of this decorates, so on
+   them it is cost with no payoff. Cards read very slightly flatter without the
+   resting 2-degree tilt -- the trade for not compositing a 3D transform and two
+   drop-shadow filters per card on hardware that struggles with them. */
+@media (hover: none) {
+  .hover-overlay {
+    display: none;
+  }
+  .icon-3d {
+    filter: none;
+    transform: none;
+  }
+  .card-3d {
+    transform: none;
+  }
+}
+
 /* Motion here is decorative (pulsing dots, 3D card tilts, glow borders). Users who
    ask the OS for reduced motion get none of it, so nothing decorative can trigger
    vertigo or distract from the content. */

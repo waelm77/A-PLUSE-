@@ -8,7 +8,33 @@
     <title>منصة A+ - جامعة شقراء</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <!--
+      Loaded without blocking first paint. A stylesheet <link> in <head> is
+      render-blocking: nothing paints until this third-party CSS resolves, so a
+      slow route to fonts.googleapis.com delayed the whole app. `display=swap`
+      only governs the font *files* once the CSS arrives, not the CSS itself.
+
+      The preload starts the fetch at normal priority on purpose -- a bare
+      media="print" link gets deprioritised by browsers, which is the usual
+      failure mode of this pattern.
+    -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;900&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;900&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;900&display=swap"
+      />
+    </noscript>
   </head>
   <body>
     <div id="root"></div>

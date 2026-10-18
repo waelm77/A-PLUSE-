@@ -53,6 +53,8 @@ import {
   ClipboardCheck,
   FormInput,
   Swords,
+  Stamp,
+  Loader2,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import toast from "react-hot-toast";
@@ -74,6 +76,7 @@ import {
   toggleFileFreeStatus,
   toggleFileDownloadStatus,
   toggleFileViewStatus,
+  toggleFileWatermarkStatus,
   toggleAssessmentFreeStatus,
   verifyStudentCredentials,
   registerDevice,
@@ -104,6 +107,8 @@ import {
   toggleQuizHidden,
   subscribeQuizzesBySubject,
 } from "@/services/firestore";
+import { deliverWatermarkedFile, buildWatermarkedBlob, type WatermarkKind } from "@/lib/watermark";
+import { uploadFile, MAX_UPLOAD_BYTES, ALLOWED_UPLOAD_TYPES } from "@/services/storage";
 import type { Subject, Video, FileItem, Assessment, Quiz } from "@/types";
 import QuizEditorDialog, { type QuizPayload } from "@/components/QuizEditorDialog";
 import QuizRunner, { type QuizOutcome } from "@/components/QuizRunner";
@@ -332,13 +337,14 @@ export default function SubjectPage() {
 
   const [fileForm, setFileForm] = useState({
     title: "",
-    fileType: "pdf",
-    size: "",
-    downloadUrl: "",
     isFree: true,
     canDownload: true,
     canView: true,
+    watermark: true,
   });
+  const [fileToUpload, setFileToUpload] = useState<File | null>(null);
+  const [fileUploading, setFileUploading] = useState(false);
+  const [fileUploadProgress, setFileUploadProgress] = useState(0);
 
   const [assessmentForm, setAssessmentForm] = useState({
     title: "",
@@ -600,29 +606,57 @@ export default function SubjectPage() {
     }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files?.[0] ?? null;
+    e.target.value = "";
+    if (!picked) return;
+    if (picked.size > MAX_UPLOAD_BYTES) {
+      toast.error("حجم الملف يتجاوز الحد الأقصى (50 ميجابايت)");
+      return;
+    }
+    if (!ALLOWED_UPLOAD_TYPES.includes(picked.type)) {
+      toast.error("يُسمح فقط بملفات PDF أو صور JPEG / PNG");
+      return;
+    }
+    setFileToUpload(picked);
+    setFileForm((f) => (f.title.trim() ? f : { ...f, title: picked.name.replace(/\.[^.]+$/, "") }));
+  };
+
   const handleFileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id || !fileForm.title.trim() || !fileForm.downloadUrl.trim()) return;
+    if (!id || !fileForm.title.trim() || !fileToUpload) return;
     setSubmitting(true);
+    setFileUploading(true);
+    setFileUploadProgress(0);
     try {
+      const { downloadUrl, storagePath } = await uploadFile(fileToUpload, id, setFileUploadProgress);
+      const sizeKb = fileToUpload.size / 1024;
+      const sizeLabel =
+        sizeKb >= 1024 ? `${(sizeKb / 1024).toFixed(1)} م.ب` : `${Math.round(sizeKb)} ك.ب`;
+      const ext = fileToUpload.name.split(".").pop()?.toLowerCase() || "";
       await createFile({
         subjectId: id,
-        title: fileForm.title,
-        fileType: fileForm.fileType,
-        size: fileForm.size || undefined,
-        downloadUrl: fileForm.downloadUrl,
+        title: fileForm.title.trim(),
+        fileType: fileToUpload.type === "application/pdf" ? "pdf" : ext === "png" ? "png" : ext === "jpg" || ext === "jpeg" ? "jpg" : "pdf",
+        size: sizeLabel,
+        downloadUrl,
+        storagePath,
         isFree: fileForm.isFree,
         canDownload: fileForm.canDownload,
         canView: fileForm.canView,
+        watermark: fileForm.watermark,
       });
       toast.success("تم إضافة الملف بنجاح");
       setFileOpen(false);
-      setFileForm({ title: "", fileType: "pdf", size: "", downloadUrl: "", isFree: true, canDownload: true, canView: true });
-    } catch (e) {
-      console.error("Add file error:", e);
-      toast.error("حدث خطأ أثناء إضافة الملف");
+      setFileForm({ title: "", isFree: true, canDownload: true, canView: true, watermark: true });
+      setFileToUpload(null);
+    } catch (err) {
+      console.error("Add file error:", err);
+      toast.error(errorMessage(err, "حدث خطأ أثناء إضافة الملف"));
     } finally {
       setSubmitting(false);
+      setFileUploading(false);
+      setFileUploadProgress(0);
     }
   };
 
@@ -787,6 +821,15 @@ export default function SubjectPage() {
       toast.success(!current ? "تم إخفاء الملف عن الطلاب" : "تم إظهار الملف للطلاب");
     } catch (err) {
       toast.error(errorMessage(err, "تعذّر تغيير حالة إخفاء الملف"));
+    }
+  };
+
+  const handleToggleFileWatermark = async (fileId: string, current: boolean) => {
+    try {
+      await toggleFileWatermarkStatus(fileId, !current);
+      toast.success(!current ? "تم تفعيل العلامة المائية" : "تم إيقاف العلامة المائية");
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر تغيير حالة العلامة المائية"));
     }
   };
 
@@ -1240,13 +1283,33 @@ export default function SubjectPage() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="file-url">رابط الملف</Label>
-                        <Input id="file-url"
-                          value={fileForm.downloadUrl}
-                          onChange={(e) => setFileForm({ ...fileForm, downloadUrl: e.target.value })}
-                          placeholder="رابط مباشر للملف (PDF)"
-                          required
+                        <Label htmlFor="file-upload">الملف (PDF أو صورة)</Label>
+                        <Input
+                          id="file-upload"
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                          onChange={handleFileSelect}
+                          disabled={fileUploading}
+                          className="cursor-pointer"
                         />
+                        {fileToUpload && (
+                          <p className="mt-1 text-xs text-muted-foreground truncate">
+                            {fileToUpload.name}
+                          </p>
+                        )}
+                        {fileUploading && (
+                          <div className="mt-2 space-y-1">
+                            <div className="h-1.5 w-full overflow-hidden rounded bg-muted">
+                              <div
+                                className="h-full bg-primary transition-all"
+                                style={{ width: `${fileUploadProgress}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              جاري الرفع... {fileUploadProgress}%
+                            </p>
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <input
@@ -1278,8 +1341,25 @@ export default function SubjectPage() {
                         />
                         <Label htmlFor="fileCanView">متاح للمشاهدة المباشرة</Label>
                       </div>
-                      <Button type="submit" className="w-full" disabled={submitting}>
-                        {submitting ? "جاري الإضافة..." : "إضافة الملف"}
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="fileWatermark"
+                          checked={fileForm.watermark}
+                          onChange={(e) => setFileForm({ ...fileForm, watermark: e.target.checked })}
+                          className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                        <Label htmlFor="fileWatermark">تطبيق العلامة المائية عند التحميل والمشاهدة</Label>
+                      </div>
+                      <Button type="submit" className="w-full" disabled={submitting || !fileToUpload || fileUploading}>
+                        {submitting ? (
+                          <span className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            جاري الإضافة...
+                          </span>
+                        ) : (
+                          "إضافة الملف"
+                        )}
                       </Button>
                     </form>
                   </DialogContent>
@@ -1311,6 +1391,9 @@ export default function SubjectPage() {
                       onToggleView={handleToggleFileView}
                       isHidden={!!file.isHidden}
                       onToggleHide={handleToggleFileHidden}
+                      onToggleWatermark={handleToggleFileWatermark}
+                      student={studentSession ?? undefined}
+                      subjectName={subject?.name}
                       onOpenAccess={openAccessDialog}
                     />
                   </div>
@@ -2225,6 +2308,9 @@ function FileCard({
   onOpenAccess,
   isHidden,
   onToggleHide,
+  onToggleWatermark,
+  student,
+  subjectName,
 }: {
   file: FileItem;
   onPreview: (file: FileItem) => void;
@@ -2240,8 +2326,76 @@ function FileCard({
   onOpenAccess: () => void;
   isHidden?: boolean;
   onToggleHide?: (fileId: string, current: boolean) => void;
+  onToggleWatermark?: (fileId: string, current: boolean) => void;
+  student?: { username: string; displayName: string };
+  subjectName?: string;
 }) {
+  const [busyAction, setBusyAction] = useState<"view" | "download" | null>(null);
   const canAccess = isAdmin || file.isFree || hasSubjectAccess;
+  const applyWatermark = file.watermark !== false;
+  const wmKind: WatermarkKind =
+    file.fileType.toLowerCase().includes("pdf") || /\.pdf($|[?#])/i.test(file.downloadUrl)
+      ? "pdf"
+      : "image";
+  // Watermarking needs a signed-in student's name; admins preview the original.
+  const needsWatermark = applyWatermark && !!student?.displayName;
+
+  const handleView = async () => {
+    if (!needsWatermark || !student) {
+      onPreview(file);
+      return;
+    }
+    setBusyAction("view");
+    try {
+      const { blob } = await buildWatermarkedBlob({
+        url: file.downloadUrl,
+        kind: wmKind,
+        student,
+        subjectName,
+      });
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر فتح الملف — تواصل مع الإدارة"));
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!needsWatermark || !student) {
+      const a = document.createElement("a");
+      a.href = file.downloadUrl;
+      a.download = "";
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+    setBusyAction("download");
+    try {
+      await deliverWatermarkedFile({
+        url: file.downloadUrl,
+        kind: wmKind,
+        title: file.title,
+        student,
+        subjectName,
+      });
+    } catch (err) {
+      toast.error(errorMessage(err, "تعذّر تحميل الملف — تواصل مع الإدارة"));
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   return (
     <Card className={`hover:border-primary/50 transition-all group ${!canAccess ? 'opacity-80' : ''} ${isHidden ? 'opacity-45 saturate-50' : ''}`}>
@@ -2282,6 +2436,12 @@ function FileCard({
                   تحميل
                 </span>
               )}
+              {applyWatermark && (
+                <span className="rounded bg-violet-500/90 px-1.5 py-0.5 text-[10px] text-white font-bold flex items-center gap-1">
+                  <Stamp className="h-3 w-3" />
+                  مائي
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -2305,20 +2465,33 @@ function FileCard({
               </Button>
             ) : (
               <>
-              <Button size="sm" variant="ghost" onClick={() => onPreview(file)} className="gap-1">
-                <Eye className="h-4 w-4" />
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleView}
+                disabled={busyAction === "view"}
+                className="gap-1"
+              >
+                {busyAction === "view" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
                 <span className="hidden sm:inline">معاينة</span>
               </Button>
               {file.canDownload && (
                 <Button
                   size="sm"
                   className="gap-1 bg-primary text-primary-foreground hover:bg-primary/90"
-                  asChild
+                  onClick={handleDownload}
+                  disabled={busyAction === "download"}
                 >
-                  <a href={file.downloadUrl} target="_blank" rel="noopener noreferrer" download>
+                  {busyAction === "download" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
                     <Download className="h-4 w-4" />
-                    تحميل
-                  </a>
+                  )}
+                  تحميل
                 </Button>
               )}
               </>
@@ -2357,6 +2530,15 @@ function FileCard({
                 title={file.canView ? 'تعطيل المشاهدة' : 'تفعيل المشاهدة'}
               >
                 <Eye className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className={`p-2 h-auto ${applyWatermark ? 'text-violet-600 hover:text-violet-800' : 'text-muted-foreground hover:text-violet-600'}`}
+                onClick={() => onToggleWatermark?.(file.id, applyWatermark)}
+                title={applyWatermark ? 'إيقاف العلامة المائية' : 'تفعيل العلامة المائية'}
+              >
+                <Stamp className="h-4 w-4" />
               </Button>
               <Button
                 size="sm"

@@ -27,6 +27,9 @@ export default function Navbar() {
             <GraduationCap className="h-8 w-8 text-primary" />
           </div>
           <span className="font-black">منصة <span style={{ color: '#FFD700' }}>A+</span></span>
+          <span className="rounded bg-foreground/5 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+            v2026.10.18-cloudinary-watermark
+          </span>
         </Link>
 
         <div className="flex items-center gap-1 sm:gap-3">
