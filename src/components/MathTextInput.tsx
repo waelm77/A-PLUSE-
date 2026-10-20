@@ -11,7 +11,8 @@ import RichText from "@/components/RichText";
  *     exactly what will be wrapped,
  *   • draws a synthetic caret when the selection is collapsed,
  *   • scrolls in sync with the input on long text.
- * B = عريض (**…**), red A = أحمر (##…##) — wrap the selection (or start a
+ * B = عريض (**…**), red A = أحمر (##…##), x₂ = رقم سفلي (~…~), x² = رقم علوي
+ * (^…^) — wrap the selection (or start a
  * fresh pair for the next typed word) and keep the wrapped text selected so
  * bold then red nest cleanly (##**كلمة**##).
  */
@@ -20,7 +21,7 @@ export default function MathTextInput({
   onChange,
   onPaste,
   placeholder,
-  dir = "rtl",
+  dir = "auto",
   autoFocus,
 }: {
   value: string;
@@ -47,16 +48,17 @@ export default function MathTextInput({
     setScrollX(rtl ? el.scrollLeft : -el.scrollLeft);
   };
 
-  const wrapSelection = (marker: "**" | "##") => {
+  const wrapSelection = (marker: "**" | "##" | "~" | "^") => {
     const input = inputRef.current;
     if (!input) return;
     const raw = input.value;
+    const mLen = marker.length;
     let s = input.selectionStart ?? raw.length;
     let e = input.selectionEnd ?? raw.length;
     if (s > e) [s, e] = [e, s];
     const selected = raw.slice(s, e);
 
-    if (raw.slice(Math.max(0, s - 2), s) === marker && raw.slice(e, e + 2) === marker) {
+    if (raw.slice(Math.max(0, s - mLen), s) === marker && raw.slice(e, e + mLen) === marker) {
       requestAnimationFrame(() => {
         input.focus();
         input.setSelectionRange(s, e);
@@ -64,9 +66,9 @@ export default function MathTextInput({
       return;
     }
     const wrapped =
-      selected.startsWith(marker) && selected.endsWith(marker) && selected.length >= marker.length * 2;
+      selected.startsWith(marker) && selected.endsWith(marker) && selected.length >= mLen * 2;
     if (wrapped) {
-      const inner = selected.slice(marker.length, -marker.length);
+      const inner = selected.slice(mLen, -mLen);
       onChange(raw.slice(0, s) + inner + raw.slice(e));
       requestAnimationFrame(() => {
         input.focus();
@@ -75,7 +77,7 @@ export default function MathTextInput({
       return;
     }
     onChange(raw.slice(0, s) + marker + selected + marker + raw.slice(e));
-    const anchor = s + marker.length;
+    const anchor = s + mLen;
     requestAnimationFrame(() => {
       input.focus();
       input.setSelectionRange(anchor, anchor + selected.length);
@@ -115,6 +117,26 @@ export default function MathTextInput({
             aria-label="لون أحمر"
           >
             A
+          </button>
+          <button
+            type="button"
+            className={toolButton}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => wrapSelection("~")}
+            title="رقم سفلي — ~2~ (مثل H~2~O)"
+            aria-label="رقم سفلي"
+          >
+            x₂
+          </button>
+          <button
+            type="button"
+            className={toolButton}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => wrapSelection("^")}
+            title="رقم علوي — ^2^ (مثل m^2^)"
+            aria-label="رقم علوي"
+          >
+            x²
           </button>
         </div>
       )}

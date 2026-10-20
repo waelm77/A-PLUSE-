@@ -10,8 +10,8 @@ import type { ReactNode } from "react";
 // — never dangerouslySetInnerHTML. Lone ^ / ~ / ** / ## (unpaired) stay as
 // literal characters.
 
-const SUPERSCRIPTS = new Set("⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿªº");
-const SUBSCRIPTS = new Set("₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓ");
+const SUPERSCRIPTS = new Set("⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿªºᵐˢᵗᵃᵇᵈʰᵏᵖʳᵛʷᶻᴺᴹⱽ");
+const SUBSCRIPTS = new Set("₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓₕₖₗₘₙₚₛₜᵦᵧᵨᵩᵪᵤᵢᵥᵣ");
 
 const RED = "#dc2626";
 

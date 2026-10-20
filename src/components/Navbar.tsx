@@ -28,7 +28,7 @@ export default function Navbar() {
           </div>
           <span className="font-black">منصة <span style={{ color: '#FFD700' }}>A+</span></span>
           <span className="rounded bg-foreground/5 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
-            v2026.10.20-watermark-tile320
+            v2026.10.20-quiz-bidi-subsup
           </span>
         </Link>
 

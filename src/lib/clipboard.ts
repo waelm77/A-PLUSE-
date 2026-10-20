@@ -70,16 +70,36 @@ function convertNode(node: Node, out: string[]) {
     if (!endsWithNewline(out)) out.push("\n");
     return;
   }
-  // OMML/MathML sub/superscript runs inside equations (m:sub, m:sup).
+  // OMML content elements (m:sub/m:sup) hold ONLY the script → wrap them all.
+  // MathML (msub/msup) = [base, script] → the base stays outside the markers,
+  // otherwise the base letter drops with the script (H~2~O, not ~H2~O).
   if (tag === "m:sub" || tag === "msub") {
+    const kids = Array.from(el.childNodes);
+    if (tag === "msub" && kids.length >= 2) {
+      convertNode(kids[0], out);
+      out.push("~");
+      convertNode(kids[1], out);
+      out.push("~");
+      for (const c of kids.slice(2)) convertNode(c, out);
+      return;
+    }
     out.push("~");
-    for (const c of Array.from(el.childNodes)) convertNode(c, out);
+    for (const c of kids) convertNode(c, out);
     out.push("~");
     return;
   }
   if (tag === "m:sup" || tag === "msup") {
+    const kids = Array.from(el.childNodes);
+    if (tag === "msup" && kids.length >= 2) {
+      convertNode(kids[0], out);
+      out.push("^");
+      convertNode(kids[1], out);
+      out.push("^");
+      for (const c of kids.slice(2)) convertNode(c, out);
+      return;
+    }
     out.push("^");
-    for (const c of Array.from(el.childNodes)) convertNode(c, out);
+    for (const c of kids) convertNode(c, out);
     out.push("^");
     return;
   }

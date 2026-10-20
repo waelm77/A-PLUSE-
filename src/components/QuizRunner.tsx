@@ -193,6 +193,7 @@ export default function QuizRunner({
                       return (
                         <label
                           key={oi}
+                          dir="auto"
                           className={`flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer transition-all ${
                             answers[qi] === opt.id ? "border-primary bg-primary/10" : "hover:bg-muted/50"
                           }`}
@@ -292,14 +293,14 @@ export default function QuizRunner({
                           if (isRight) {
                             cls = "border-green-500/50 bg-green-500/10 text-green-700 font-bold";
                             icon = <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />;
-                            tag = <span className="mr-auto text-[11px] text-green-600">الإجابة الصحيحة</span>;
+                            tag = <span className="ms-auto text-[11px] text-green-600">الإجابة الصحيحة</span>;
                           } else if (isChosen) {
                             cls = "border-red-500/50 bg-red-500/10 text-red-600 font-bold";
                             icon = <XCircle className="h-4 w-4 shrink-0 text-red-500" />;
-                            tag = <span className="mr-auto text-[11px] text-red-500">إجابتك</span>;
+                            tag = <span className="ms-auto text-[11px] text-red-500">إجابتك</span>;
                           }
                           return (
-                            <div key={oi} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${cls}`}>
+                            <div key={oi} dir="auto" className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${cls}`}>
                               {icon}
                               {opt.image && (
                                 <img
