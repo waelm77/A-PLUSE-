@@ -71,13 +71,13 @@ export function renderWatermarkTile(studentName: string, rotationDeg: number = B
 
   const name = safeText(studentName) || "طالب";
 
-  ctx.font = "bold 30px 'Segoe UI', Tahoma, Arial, sans-serif";
-  ctx.strokeText(name, 0, -16);
-  ctx.fillText(name, 0, -16);
+  ctx.font = "bold 26px 'Segoe UI', Tahoma, Arial, sans-serif";
+  ctx.strokeText(name, 0, -14);
+  ctx.fillText(name, 0, -14);
 
-  ctx.font = "20px 'Segoe UI', Tahoma, Arial, sans-serif";
-  ctx.strokeText(WATERMARK_LINE_2, 0, 24);
-  ctx.fillText(WATERMARK_LINE_2, 0, 24);
+  ctx.font = "18px 'Segoe UI', Tahoma, Arial, sans-serif";
+  ctx.strokeText(WATERMARK_LINE_2, 0, 20);
+  ctx.fillText(WATERMARK_LINE_2, 0, 20);
 
   return canvas.toDataURL("image/png");
 }
@@ -105,8 +105,8 @@ async function watermarkPdf(bytes: ArrayBuffer, student: WatermarkStudent): Prom
   const tile = renderWatermarkTile(student.displayName, rotation);
   const img = await pdf.embedPng(tile);
 
-  const tw = 248;
-  const th = 124;
+  const tw = 320;
+  const th = 160;
   const offsetX = seed % tw;
   const offsetY = (seed >>> 8) % th;
   for (const page of pdf.getPages()) {
@@ -211,7 +211,7 @@ async function watermarkImage(blob: Blob, student: WatermarkStudent): Promise<Bl
   ctx.globalAlpha = 0.28;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const step = Math.max(120, canvas.width / 4);
+  const step = Math.max(160, canvas.width / 3);
   const offsetX = seed % step;
   const offsetY = (seed >>> 8) % step;
   const name = safeText(student.displayName) || "طالب";
