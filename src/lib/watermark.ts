@@ -6,8 +6,42 @@ type WatermarkStudent = { username: string; displayName: string };
  *  rendered to a transparent PNG tile that pdf-lib can stamp onto pages. */
 const WATERMARK_LINE_2 = "لا أحلل نشره أو تداوله";
 
+const BASE_ROTATION_DEG = -28;
+
 function safeText(value: string | undefined): string {
   return (value || "").replace(/\s+/g, " ").trim();
+}
+
+/** Deterministic djb2 hash of the student's username. Seeded into the grid
+ *  offset, tile rotation and the fingerprint checksum so every student's copy
+ *  differs — a single "remove this pattern" template no longer matches them all. */
+function hashSeed(text: string): number {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) {
+    h = ((h << 5) + h + text.charCodeAt(i)) >>> 0;
+  }
+  return h >>> 0;
+}
+
+/** Obfuscated identity carried inside the delivered file (PDF metadata /
+ *  PNG tEXt / JPEG comment). Not encryption — a leak can be traced back to
+ *  the student it was issued to, without the payload reading as plain text. */
+function fingerprintPayload(username: string): string {
+  const user = safeText(username) || "unknown";
+  return `a+${encodeURIComponent(user)}+${hashSeed(user).toString(36)}`;
+}
+
+/** Counterpart of the payload above; used when inspecting a leaked copy. */
+export function parseFingerprint(payload: string): string | null {
+  const m = payload.match(/^a\+(.+)\+([0-9a-z]+)$/);
+  if (!m) return null;
+  try {
+    const user = decodeURIComponent(m[1]);
+    if (hashSeed(user).toString(36) !== m[2]) return null;
+    return user;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -16,7 +50,7 @@ function safeText(value: string | undefined): string {
  * Text is drawn as an outline so the interior of every letter stays clear and
  * never obscures the content underneath it.
  */
-export function renderWatermarkTile(studentName: string): string {
+export function renderWatermarkTile(studentName: string, rotationDeg: number = BASE_ROTATION_DEG): string {
   const scale = 2;
   const w = 420;
   const h = 210;
@@ -28,7 +62,7 @@ export function renderWatermarkTile(studentName: string): string {
 
   ctx.scale(scale, scale);
   ctx.translate(w / 2, h / 2);
-  ctx.rotate((-28 * Math.PI) / 180);
+  ctx.rotate((rotationDeg * Math.PI) / 180);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.lineWidth = 1;
@@ -37,13 +71,13 @@ export function renderWatermarkTile(studentName: string): string {
 
   const name = safeText(studentName) || "طالب";
 
-  ctx.font = "bold 26px 'Segoe UI', Tahoma, Arial, sans-serif";
-  ctx.strokeText(name, 0, -14);
-  ctx.fillText(name, 0, -14);
+  ctx.font = "bold 30px 'Segoe UI', Tahoma, Arial, sans-serif";
+  ctx.strokeText(name, 0, -16);
+  ctx.fillText(name, 0, -16);
 
-  ctx.font = "18px 'Segoe UI', Tahoma, Arial, sans-serif";
-  ctx.strokeText(WATERMARK_LINE_2, 0, 20);
-  ctx.fillText(WATERMARK_LINE_2, 0, 20);
+  ctx.font = "20px 'Segoe UI', Tahoma, Arial, sans-serif";
+  ctx.strokeText(WATERMARK_LINE_2, 0, 24);
+  ctx.fillText(WATERMARK_LINE_2, 0, 24);
 
   return canvas.toDataURL("image/png");
 }
@@ -63,27 +97,102 @@ async function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   }
 }
 
-async function watermarkPdf(bytes: ArrayBuffer, studentName: string): Promise<Blob> {
+async function watermarkPdf(bytes: ArrayBuffer, student: WatermarkStudent): Promise<Blob> {
   const { PDFDocument } = await import("pdf-lib");
   const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
-  const tile = renderWatermarkTile(studentName);
+  const seed = hashSeed(student.username);
+  const rotation = BASE_ROTATION_DEG + (seed % 7) - 3;
+  const tile = renderWatermarkTile(student.displayName, rotation);
   const img = await pdf.embedPng(tile);
 
-  const tw = 320;
-  const th = 160;
+  const tw = 248;
+  const th = 124;
+  const offsetX = seed % tw;
+  const offsetY = (seed >>> 8) % th;
   for (const page of pdf.getPages()) {
     const { width, height } = page.getSize();
-    for (let y = -th / 2; y < height + th; y += th) {
-      for (let x = -tw / 2; x < width + tw; x += tw) {
+    for (let y = -th / 2 + offsetY; y < height + th; y += th) {
+      for (let x = -tw / 2 + offsetX; x < width + tw; x += tw) {
         page.drawImage(img, { x, y, width: tw, height: th, opacity: 0.24 });
       }
     }
   }
+
+  const payload = fingerprintPayload(student.username);
+  pdf.setSubject(payload);
+  pdf.setKeywords([payload]);
+
   const out = await pdf.save();
   return new Blob([out as BlobPart], { type: "application/pdf" });
 }
 
-async function watermarkImage(blob: Blob, studentName: string): Promise<Blob> {
+// ─── Fingerprint embedding for raster images ────────────────────────────────
+
+function crc32(bytes: Uint8Array): number {
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) {
+    c ^= bytes[i];
+    for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+  }
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function be32(value: number): Uint8Array {
+  const out = new Uint8Array(4);
+  new DataView(out.buffer).setUint32(0, value, false);
+  return out;
+}
+
+function concatBytes(parts: Uint8Array[]): Uint8Array {
+  const total = parts.reduce((sum, p) => sum + p.length, 0);
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.length;
+  }
+  return out;
+}
+
+/** Inserts a tEXt chunk right after IHDR (standard-conformant, readers ignore
+ *  unknown text keys). The payload is ASCII-only thanks to encodeURIComponent. */
+function injectPngText(bytes: Uint8Array, payload: string): Uint8Array {
+  const type = new Uint8Array([0x74, 0x45, 0x58, 0x74]); // "tEXt"
+  const data = concatBytes([
+    new Uint8Array(new TextEncoder().encode("APlusComment")),
+    new Uint8Array([0]),
+    new Uint8Array(new TextEncoder().encode(payload)),
+  ]);
+  const chunk = concatBytes([be32(data.length), type, data, be32(crc32(concatBytes([type, data])))]);
+  // Signature (8) + IHDR header (8) + IHDR data (13) + IHDR CRC (4) = 33
+  return concatBytes([bytes.subarray(0, 33), chunk, bytes.subarray(33)]);
+}
+
+/** Inserts a COM marker right after SOI — the earliest legal comment position. */
+function injectJpegComment(bytes: Uint8Array, payload: string): Uint8Array {
+  const body = new Uint8Array(new TextEncoder().encode(payload));
+  const marker = new Uint8Array(4 + body.length);
+  marker[0] = 0xff;
+  marker[1] = 0xfe;
+  marker[2] = ((body.length + 2) >> 8) & 0xff;
+  marker[3] = (body.length + 2) & 0xff;
+  marker.set(body, 4);
+  return concatBytes([bytes.subarray(0, 2), marker, bytes.subarray(2)]);
+}
+
+async function attachFingerprint(blob: Blob, username: string): Promise<Blob> {
+  const payload = fingerprintPayload(username);
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  if (blob.type === "image/png") {
+    return new Blob([injectPngText(bytes, payload) as BlobPart], { type: "image/png" });
+  }
+  if (blob.type === "image/jpeg") {
+    return new Blob([injectJpegComment(bytes, payload) as BlobPart], { type: "image/jpeg" });
+  }
+  return blob;
+}
+
+async function watermarkImage(blob: Blob, student: WatermarkStudent): Promise<Blob> {
   const img = await loadImageFromBlob(blob);
   const canvas = document.createElement("canvas");
   canvas.width = img.naturalWidth || img.width;
@@ -91,18 +200,23 @@ async function watermarkImage(blob: Blob, studentName: string): Promise<Blob> {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("تعذّر تهيئة لوحة الرسم للعلامة المائية");
 
+  const seed = hashSeed(student.username);
+  const rotation = BASE_ROTATION_DEG + (seed % 7) - 3;
+
   ctx.drawImage(img, 0, 0);
 
   ctx.save();
   ctx.translate(canvas.width / 2, canvas.height / 2);
-  ctx.rotate((-28 * Math.PI) / 180);
+  ctx.rotate((rotation * Math.PI) / 180);
   ctx.globalAlpha = 0.28;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const step = Math.max(160, canvas.width / 3);
-  const name = safeText(studentName) || "طالب";
-  for (let x = -canvas.width; x < canvas.width; x += step) {
-    for (let y = -canvas.height; y < canvas.height; y += step) {
+  const step = Math.max(120, canvas.width / 4);
+  const offsetX = seed % step;
+  const offsetY = (seed >>> 8) % step;
+  const name = safeText(student.displayName) || "طالب";
+  for (let x = -canvas.width + offsetX; x < canvas.width; x += step) {
+    for (let y = -canvas.height + offsetY; y < canvas.height; y += step) {
       ctx.font = `bold ${Math.max(20, canvas.width / 26)}px 'Segoe UI', Tahoma, Arial, sans-serif`;
       ctx.lineWidth = 1.5;
       ctx.strokeStyle = "#111827";
@@ -117,9 +231,10 @@ async function watermarkImage(blob: Blob, studentName: string): Promise<Blob> {
   ctx.restore();
 
   const outType = blob.type === "image/png" ? "image/png" : "image/jpeg";
-  return await new Promise<Blob>((resolve, reject) => {
+  const drawn = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("تعذّر إنشاء الصورة"))), outType, 0.92);
   });
+  return await attachFingerprint(drawn, student.username);
 }
 
 function triggerDownload(blob: Blob, filename: string): void {
@@ -165,7 +280,7 @@ export async function buildWatermarkedBlob(params: {
   if (kind === "pdf") {
     const bytes = await blob.arrayBuffer();
     try {
-      return { blob: await watermarkPdf(bytes, student.displayName), ext: ".pdf" };
+      return { blob: await watermarkPdf(bytes, student), ext: ".pdf" };
     } catch (err) {
       console.error("Watermark pdf error:", err);
       throw new Error("تعذّر تجهيز ملف PDF بالعلامة المائية");
@@ -173,7 +288,7 @@ export async function buildWatermarkedBlob(params: {
   }
 
   try {
-    return { blob: await watermarkImage(blob, student.displayName), ext: blob.type === "image/png" ? ".png" : ".jpg" };
+    return { blob: await watermarkImage(blob, student), ext: blob.type === "image/png" ? ".png" : ".jpg" };
   } catch (err) {
     console.error("Watermark image error:", err);
     throw new Error("تعذّر تجهيز الصورة بالعلامة المائية");
