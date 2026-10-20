@@ -13,8 +13,10 @@ function safeText(value: string | undefined): string {
 /**
  * Renders a transparent tile containing the student's name and the usage
  * warning, rotated diagonally. The tile is what gets repeated across pages.
+ * Text is drawn as an outline so the interior of every letter stays clear and
+ * never obscures the content underneath it.
  */
-export function renderWatermarkTile(studentName: string, subjectName?: string): string {
+export function renderWatermarkTile(studentName: string): string {
   const scale = 2;
   const w = 420;
   const h = 210;
@@ -29,17 +31,19 @@ export function renderWatermarkTile(studentName: string, subjectName?: string): 
   ctx.rotate((-28 * Math.PI) / 180);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = "rgba(20, 20, 30, 0.85)";
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(20, 20, 30, 0.95)";
+  ctx.fillStyle = "rgba(20, 20, 30, 0.08)";
 
   const name = safeText(studentName) || "طالب";
-  const subject = safeText(subjectName);
 
   ctx.font = "bold 26px 'Segoe UI', Tahoma, Arial, sans-serif";
-  ctx.fillText(name, 0, subject ? -18 : 0);
+  ctx.strokeText(name, 0, -14);
+  ctx.fillText(name, 0, -14);
 
   ctx.font = "18px 'Segoe UI', Tahoma, Arial, sans-serif";
-  if (subject) ctx.fillText(subject, 0, 12);
-  ctx.fillText(WATERMARK_LINE_2, 0, subject ? 40 : 26);
+  ctx.strokeText(WATERMARK_LINE_2, 0, 20);
+  ctx.fillText(WATERMARK_LINE_2, 0, 20);
 
   return canvas.toDataURL("image/png");
 }
@@ -59,19 +63,19 @@ async function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   }
 }
 
-async function watermarkPdf(bytes: ArrayBuffer, studentName: string, subjectName?: string): Promise<Blob> {
+async function watermarkPdf(bytes: ArrayBuffer, studentName: string): Promise<Blob> {
   const { PDFDocument } = await import("pdf-lib");
   const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
-  const tile = renderWatermarkTile(studentName, subjectName);
+  const tile = renderWatermarkTile(studentName);
   const img = await pdf.embedPng(tile);
 
-  const tw = 360;
-  const th = 180;
+  const tw = 320;
+  const th = 160;
   for (const page of pdf.getPages()) {
     const { width, height } = page.getSize();
     for (let y = -th / 2; y < height + th; y += th) {
       for (let x = -tw / 2; x < width + tw; x += tw) {
-        page.drawImage(img, { x, y, width: tw, height: th, opacity: 0.12 });
+        page.drawImage(img, { x, y, width: tw, height: th, opacity: 0.24 });
       }
     }
   }
@@ -79,7 +83,7 @@ async function watermarkPdf(bytes: ArrayBuffer, studentName: string, subjectName
   return new Blob([out as BlobPart], { type: "application/pdf" });
 }
 
-async function watermarkImage(blob: Blob, studentName: string, subjectName?: string): Promise<Blob> {
+async function watermarkImage(blob: Blob, studentName: string): Promise<Blob> {
   const img = await loadImageFromBlob(blob);
   const canvas = document.createElement("canvas");
   canvas.width = img.naturalWidth || img.width;
@@ -92,21 +96,22 @@ async function watermarkImage(blob: Blob, studentName: string, subjectName?: str
   ctx.save();
   ctx.translate(canvas.width / 2, canvas.height / 2);
   ctx.rotate((-28 * Math.PI) / 180);
-  ctx.globalAlpha = 0.22;
-  ctx.fillStyle = "#111827";
+  ctx.globalAlpha = 0.28;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   const step = Math.max(160, canvas.width / 3);
   const name = safeText(studentName) || "طالب";
-  const subject = safeText(subjectName);
   for (let x = -canvas.width; x < canvas.width; x += step) {
     for (let y = -canvas.height; y < canvas.height; y += step) {
       ctx.font = `bold ${Math.max(20, canvas.width / 26)}px 'Segoe UI', Tahoma, Arial, sans-serif`;
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "#111827";
+      ctx.fillStyle = "rgba(17, 24, 39, 0.1)";
+      ctx.strokeText(name, x, y);
       ctx.fillText(name, x, y);
-      if (subject) {
-        ctx.font = `${Math.max(14, canvas.width / 38)}px 'Segoe UI', Tahoma, Arial, sans-serif`;
-        ctx.fillText(subject, x, y + Math.max(24, canvas.width / 20));
-      }
+      ctx.font = `${Math.max(14, canvas.width / 38)}px 'Segoe UI', Tahoma, Arial, sans-serif`;
+      ctx.strokeText(WATERMARK_LINE_2, x, y + Math.max(24, canvas.width / 20));
+      ctx.fillText(WATERMARK_LINE_2, x, y + Math.max(24, canvas.width / 20));
     }
   }
   ctx.restore();
@@ -144,9 +149,8 @@ export async function buildWatermarkedBlob(params: {
   url: string;
   kind: WatermarkKind;
   student: WatermarkStudent;
-  subjectName?: string;
 }): Promise<{ blob: Blob; ext: string }> {
-  const { url, kind, student, subjectName } = params;
+  const { url, kind, student } = params;
 
   let blob: Blob;
   try {
@@ -161,7 +165,7 @@ export async function buildWatermarkedBlob(params: {
   if (kind === "pdf") {
     const bytes = await blob.arrayBuffer();
     try {
-      return { blob: await watermarkPdf(bytes, student.displayName, subjectName), ext: ".pdf" };
+      return { blob: await watermarkPdf(bytes, student.displayName), ext: ".pdf" };
     } catch (err) {
       console.error("Watermark pdf error:", err);
       throw new Error("تعذّر تجهيز ملف PDF بالعلامة المائية");
@@ -169,7 +173,7 @@ export async function buildWatermarkedBlob(params: {
   }
 
   try {
-    return { blob: await watermarkImage(blob, student.displayName, subjectName), ext: blob.type === "image/png" ? ".png" : ".jpg" };
+    return { blob: await watermarkImage(blob, student.displayName), ext: blob.type === "image/png" ? ".png" : ".jpg" };
   } catch (err) {
     console.error("Watermark image error:", err);
     throw new Error("تعذّر تجهيز الصورة بالعلامة المائية");
@@ -184,7 +188,6 @@ export async function deliverWatermarkedFile(params: {
   kind: WatermarkKind;
   title: string;
   student: WatermarkStudent;
-  subjectName?: string;
 }): Promise<void> {
   const { blob, ext } = await buildWatermarkedBlob(params);
   triggerDownload(blob, buildFilename(params.title, params.student.displayName, ext));

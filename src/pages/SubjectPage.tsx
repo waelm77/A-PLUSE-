@@ -1393,7 +1393,6 @@ export default function SubjectPage() {
                       onToggleHide={handleToggleFileHidden}
                       onToggleWatermark={handleToggleFileWatermark}
                       student={studentSession ?? undefined}
-                      subjectName={subject?.name}
                       onOpenAccess={openAccessDialog}
                     />
                   </div>
@@ -2310,7 +2309,6 @@ function FileCard({
   onToggleHide,
   onToggleWatermark,
   student,
-  subjectName,
 }: {
   file: FileItem;
   onPreview: (file: FileItem) => void;
@@ -2328,7 +2326,6 @@ function FileCard({
   onToggleHide?: (fileId: string, current: boolean) => void;
   onToggleWatermark?: (fileId: string, current: boolean) => void;
   student?: { username: string; displayName: string };
-  subjectName?: string;
 }) {
   const [busyAction, setBusyAction] = useState<"view" | "download" | null>(null);
   const canAccess = isAdmin || file.isFree || hasSubjectAccess;
@@ -2351,7 +2348,6 @@ function FileCard({
         url: file.downloadUrl,
         kind: wmKind,
         student,
-        subjectName,
       });
       const objUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -2388,7 +2384,6 @@ function FileCard({
         kind: wmKind,
         title: file.title,
         student,
-        subjectName,
       });
     } catch (err) {
       toast.error(errorMessage(err, "تعذّر تحميل الملف — تواصل مع الإدارة"));
