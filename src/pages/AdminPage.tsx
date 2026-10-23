@@ -759,8 +759,8 @@ export default function AdminPage() {
       ? isolateLtr(formatSecret(form.password))
       : isolateLtr(form.password);
     return [
-      "منصه A+",
-      "https://a-pluse.vercel.app/",
+      `منصه ${isolateLtr("A+")} التعليميه`,
+      "https://wael-educatinal-website.web.app",
       "",
       `اسم المستخدم: ${form.username}`,
       "",

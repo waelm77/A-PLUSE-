@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
+import { APP_BUILD } from "@/lib/version";
 import { Button } from "@/components/ui/button";
 import {
   GraduationCap,
@@ -28,7 +29,7 @@ export default function Navbar() {
           </div>
           <span className="font-black">منصة <span style={{ color: '#FFD700' }}>A+</span></span>
           <span className="rounded bg-foreground/5 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
-            v2026.10.20-quiz-bidi-subsup
+            {APP_BUILD}
           </span>
         </Link>
 
